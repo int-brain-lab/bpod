@@ -1,3 +1,4 @@
+mock-serial
 numpy
 pyserial
 setuptools
