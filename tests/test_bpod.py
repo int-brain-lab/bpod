@@ -10,7 +10,6 @@ class TestBpod(unittest.TestCase):
     def test_unconnected(self):
         bpod = Bpod()
         assert bpod.is_open is False
-        bpod.close()
 
     def test_singleton(self):
         bpod1 = Bpod()
@@ -22,4 +21,7 @@ class TestBpod(unittest.TestCase):
         assert bpod1 is not bpod3
         assert bpod3 is not bpod4
         assert bpod4 is bpod5
-        self.assertRaises(Exception, bpod1.setPort)
+
+    def test_set_port(self):
+        bpod = Bpod()
+        self.assertRaises(Exception, bpod.setPort)
