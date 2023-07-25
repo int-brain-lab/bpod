@@ -192,9 +192,7 @@ class Bpod(serial.Serial):
         self.write(query)
         return self.read(n_bytes, dtype)
 
-    def query_chunks(
-        self, query: any, n_chunks: int, first_len: int, n_preallocate: int = 128
-    ) -> (bytes, list):
+    def query_chunks(self, query: any, n_chunks: int, first_len: int) -> (bytes, list):
         """Receive multiple chunks of data from Bpod.
 
         The last byte of each chunk (except the last one) determines the length of the
@@ -208,8 +206,6 @@ class Bpod(serial.Serial):
             Number of chunks to read.
         first_len : int
             Length of first chunk.
-        n_preallocate : int, default: 128
-            Number of bytes to preallocate.
 
         Returns
         -------
