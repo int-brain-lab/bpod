@@ -28,6 +28,8 @@ class Bpod(serial.Serial):
     output: dict = dict()
 
     def __init__(self, port=None, connect_bpod: bool = True, **kwargs):
+        if "baudrate" not in kwargs:
+            kwargs["baudrate"] = 1312500
         super().__init__(**kwargs)
         super().setPort(port)
         if port and connect_bpod:
