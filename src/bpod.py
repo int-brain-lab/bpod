@@ -250,7 +250,7 @@ class Bpod(serial.Serial):
                 case b"V":
                     name = "Valve"
                 case b"P":
-                    name = "Port"
+                    name = "PWM"
                 case _:
                     continue
             name = "{}{}".format(name, description_array[:i].count(io_type) + 1)
@@ -279,6 +279,6 @@ class Bpod(serial.Serial):
 
     class Output(_IO):
         def override(self, state: bool | np.uint8) -> None:
-            if self._io_type == b"D" or b"B" or b"W":
+            if self._io_type in [b"D", b"B", b"W"]:
                 state = state > 0
             self._write(["O", self.index, state])
