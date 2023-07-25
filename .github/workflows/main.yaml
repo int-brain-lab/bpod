@@ -1,0 +1,46 @@
+name: Bpod
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: build (${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ["ubuntu-latest", "windows-latest"]
+        python-version: ["3.10"]
+    steps:
+      - name: Checkout bpod repo
+        uses: actions/checkout@v3
+        with:
+          path: bpod
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: flake8
+        run: |
+          pip install flake8 --quiet
+          cd bpod
+          python -m flake8
+
+      - name: requirements
+        shell: bash -l {0}
+        run: |
+          pip install --editable bpod
+          pip install -r bpod/requirements.txt
+
+      - name: unit tests
+        shell: bash -l {0}
+        run: |
+          cd bpod
+          cd tests
+          python -m unittest discover
