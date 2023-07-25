@@ -189,20 +189,15 @@ class Bpod(serial.Serial):
             Slices for recovering individual data chunks from the bytestring.
         """
         self.write(query)
-        out = np.empty(n_preallocate, dtype=np.uint8)
+        out = b""
         slices = [slice(0, first_len)]
         n = first_len
         for i in range(n_chunks):
-            if slices[i].stop > n_preallocate:
-                out = np.concatenate(
-                    (out, np.empty(slices[i].stop - len(out), dtype=np.uint8))
-                )
-                log.warning("Not enough memory preallocated for efficient operation.")
-            out[slices[i]] = self.read(n, np.uint8)
+            out = b"".join([out, self.read(n)])
             if i < (n_chunks - 1):
                 n = out[slices[i].stop - 1] + (i != n_chunks - 2)
                 slices.append(slice(slices[i].stop, slices[i].stop + n))
-        return out[: slices[-1].stop].tobytes(), slices
+        return out[: slices[-1].stop], slices
 
     @staticmethod
     def to_bytes(data: any) -> bytes:
