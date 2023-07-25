@@ -45,16 +45,23 @@ if platform.system() == "Linux":
         receive_bytes=b"%\x0f\x0f\x0f\x0f\x0f\x0f",
         send_bytes=b"\x01",
     )
+    device.stub(
+        name="disconnect_state_machine",
+        receive_bytes=b"Z",
+        send_bytes=b"",
+    )
 
 
 @unittest.skipUnless(platform.system() == "Linux", "MockSerial depends on Linux OS")
 class TestSerial(unittest.TestCase):
     def test_datatypes(self):
         bpod = Bpod(port=device.port, timeout=0.1)
+        assert bpod.is_open
         assert bpod.query(b"A") == b"B"
         assert bpod.query(np.uint8(65)) == b"B"
         assert bpod.query([np.uint8(66), "a"], 2) == b"OK"
         bpod.close()
+        assert not bpod.is_open
 
     def test_initialization(self):
         bpod = Bpod(port=device.port, timeout=0.1)

@@ -10,3 +10,4 @@ class TestUnconnected(unittest.TestCase):
     def test_unconnected(self):
         bpod = Bpod()
         assert bpod.is_open is False
+        bpod.close()

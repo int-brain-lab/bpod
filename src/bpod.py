@@ -43,10 +43,12 @@ class Bpod(serial.Serial):
         Exception
             Handshake failed: The Bpod did not acknowledge our request.
         """
+        log.info("Connecting to Bpod ...")
         super().open()
+        while not self.is_open:
+            pass
         log.debug('Serial port "{}" opened.'.format(self.portstr))
 
-        log.info("Connecting to Bpod ...")
         if not self.handshake():
             raise Exception("Handshake failed")
         log.debug("Handshake successful")
@@ -91,6 +93,16 @@ class Bpod(serial.Serial):
         log.debug("Configuring I/O ...")
         self.input = self._create_io("input")
         self.output = self._create_io("output")
+
+    def close(self):
+        if not self.is_open:
+            return
+        log.debug("Disconnecting state machine.")
+        self.write(b"Z")
+        super().close()
+        while self.is_open:
+            pass
+        log.debug('Serial port "{}" closed.'.format(self.portstr))
 
     def handshake(self) -> bool:
         """Try to perform a handshake with a Bpod Finite State Machine.
