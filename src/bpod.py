@@ -1,6 +1,7 @@
 from __future__ import annotations
-from typing import Literal
+from typing import Literal, NoReturn
 import logging
+import threading
 
 import numpy as np
 import serial
@@ -26,14 +27,34 @@ class Bpod(serial.Serial):
 
     input: dict = dict()
     output: dict = dict()
+    _instances: dict = dict()
+    _lock = threading.Lock()
 
-    def __init__(self, port=None, connect_bpod: bool = True, **kwargs):
+    def __new__(cls, port=None, **kwargs) -> Bpod:
+        with cls._lock:
+            instance = Bpod._instances.get(port, None)
+            if instance is None:
+                instance = super().__new__(cls)
+                Bpod._instances[port] = instance
+            return instance
+
+    def __init__(self, port=None, connect: bool = True, **kwargs) -> None:
         if "baudrate" not in kwargs:
             kwargs["baudrate"] = 1312500
         super().__init__(**kwargs)
         super().setPort(port)
-        if port and connect_bpod:
+        if port is not None and connect is True:
             self.open()
+
+    def __del__(self) -> None:
+        self.close()
+        with self._lock:
+            if self._port in Bpod._instances:
+                Bpod._instances.pop(self._port)
+
+    def setPort(self, port) -> NoReturn:
+        """Overwrite setPort() method of parent class."""
+        raise Exception("Port cannot be changed after instantiation.")
 
     def open(self) -> None:
         """Open serial connection and connect to Bpod Finite State Machine.
@@ -45,8 +66,6 @@ class Bpod(serial.Serial):
         """
         log.info("Connecting to Bpod ...")
         super().open()
-        while not self.is_open:
-            pass
         log.debug('Serial port "{}" opened.'.format(self.portstr))
 
         if not self.handshake():
@@ -100,8 +119,6 @@ class Bpod(serial.Serial):
         log.debug("Disconnecting state machine.")
         self.write(b"Z")
         super().close()
-        while self.is_open:
-            pass
         log.debug('Serial port "{}" closed.'.format(self.portstr))
 
     def handshake(self) -> bool:
