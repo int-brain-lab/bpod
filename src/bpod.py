@@ -267,10 +267,10 @@ class Bpod(serial.Serial):
 
     class Input(_IO):
         def read(self) -> bool:
-            return self._query(("I", self.index), 1) == b"\x01"
+            return self._query(["I", self.index], 1) == b"\x01"
 
         def override(self, state: bool) -> None:
-            self._write(("V", state))
+            self._write(["V", state])
 
         def enable(self, state: bool) -> None:
             pass
@@ -279,4 +279,4 @@ class Bpod(serial.Serial):
         def override(self, state: bool | np.uint8) -> None:
             if self._io_type == b"D" or b"B" or b"W":
                 state = state > 0
-            self._write(("O", self.index, state))
+            self._write(["O", self.index, state])
