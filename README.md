@@ -39,5 +39,4 @@ This repository is adhering to the following conventions:
 * [semantic versioning](https://semver.org/) for consistent version numbering logic
 * [gitflow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow)
   for managing branches
-* [Flake8](https://flake8.pycqa.org/) for style guide enforcement
-* [black](https://github.com/psf/black) for style guide enforcement
+* [black](https://github.com/psf/black) abd [Flake8](https://flake8.pycqa.org/) for style guide enforcement
