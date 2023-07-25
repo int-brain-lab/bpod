@@ -5,7 +5,11 @@ import logging
 import numpy as np
 
 from src.bpod import Bpod
-from mock_serial import MockSerial
+
+try:
+    from mock_serial import MockSerial
+except ImportError:
+    pass
 
 logging.basicConfig(level=logging.DEBUG)
 
