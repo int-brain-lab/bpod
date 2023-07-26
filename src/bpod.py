@@ -30,7 +30,9 @@ class Bpod(serial.Serial):
     _instances: dict = dict()
     _lock = threading.Lock()
 
-    def __new__(cls, port=None, **kwargs) -> Bpod:
+    def __new__(cls, port: str | None = None, **kwargs) -> Bpod:
+        if port is not None and not isinstance(port, np.compat.basestring):
+            raise ValueError("'port' must be None or a string")
         with cls._lock:
             instance = Bpod._instances.get(port, None)
             if instance is None:
@@ -41,7 +43,7 @@ class Bpod(serial.Serial):
                 log.debug("Using existing instance on port '{}'".format(port or "None"))
             return instance
 
-    def __init__(self, port=None, connect: bool = True, **kwargs) -> None:
+    def __init__(self, port: str | None = None, connect: bool = True, **kwargs) -> None:
         if "baudrate" not in kwargs:
             kwargs["baudrate"] = 1312500
         super().__init__(**kwargs)
@@ -53,7 +55,7 @@ class Bpod(serial.Serial):
         self.close()
         with self._lock:
             if self._port in Bpod._instances:
-                log.debug("Deleting instance on port '{}'".format(self._port or "None"))
+                log.debug("Deleting instance on port '{}'".format(self.port or "None"))
                 Bpod._instances.pop(self._port)
 
     def setPort(self, port) -> NoReturn:
