@@ -34,8 +34,11 @@ class Bpod(serial.Serial):
         with cls._lock:
             instance = Bpod._instances.get(port, None)
             if instance is None:
+                log.debug("Creating new instance for port '{}'".format(port or "None"))
                 instance = super().__new__(cls)
                 Bpod._instances[port] = instance
+            else:
+                log.debug("Using existing instance on port '{}'".format(port or "None"))
             return instance
 
     def __init__(self, port=None, connect: bool = True, **kwargs) -> None:
@@ -50,6 +53,7 @@ class Bpod(serial.Serial):
         self.close()
         with self._lock:
             if self._port in Bpod._instances:
+                log.debug("Deleting instance on port '{}'".format(self._port or "None"))
                 Bpod._instances.pop(self._port)
 
     def setPort(self, port) -> NoReturn:
@@ -66,7 +70,7 @@ class Bpod(serial.Serial):
         """
         log.info("Connecting to Bpod ...")
         super().open()
-        log.debug('Serial port "{}" opened.'.format(self.portstr))
+        log.debug("Serial port '{}' opened.".format(self.portstr))
 
         if not self.handshake():
             raise Exception("Handshake failed")
@@ -119,7 +123,7 @@ class Bpod(serial.Serial):
         log.debug("Disconnecting state machine.")
         self.write(b"Z")
         super().close()
-        log.debug('Serial port "{}" closed.'.format(self.portstr))
+        log.debug("Serial port '{}' closed.".format(self.portstr))
 
     def handshake(self) -> bool:
         """Try to perform a handshake with a Bpod Finite State Machine.
