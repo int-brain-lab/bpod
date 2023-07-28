@@ -302,6 +302,8 @@ class Bpod(serial.Serial):
                     name = "Valve"
                 case b"P":
                     name = "PWM"
+                case b"W":
+                    name = "Wire"
                 case _:
                     continue
             name = "{}{}".format(name, description_array[:i].count(io_type) + 1)
