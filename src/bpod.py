@@ -28,6 +28,10 @@ class SerialReaderProtocolRaw(Protocol):
         log.info(exc)
 
 
+class BpodException(Exception):
+    pass
+
+
 class Bpod(serial.Serial):
     """Class for interfacing a Bpod Finite State Machine.
 
@@ -75,14 +79,14 @@ class Bpod(serial.Serial):
 
     def setPort(self, port) -> NoReturn:
         """Overwrite setPort() method of parent class."""
-        raise Exception("Port cannot be changed after instantiation.")
+        raise BpodException("Port cannot be changed after instantiation.")
 
     def open(self) -> None:
         """Open serial connection and connect to Bpod Finite State Machine.
 
         Raises
         ------
-        Exception
+        BpodException
             Handshake failed: The Bpod did not acknowledge our request.
         """
         log.info("Connecting to Bpod ...")
@@ -91,7 +95,7 @@ class Bpod(serial.Serial):
         self._reader = ReaderThread(self, SerialReaderProtocolRaw)
 
         if not self.handshake():
-            raise Exception("Handshake failed")
+            raise BpodException("Handshake failed")
         log.debug("Handshake successful")
 
         # get Bpod version & machine type
@@ -286,7 +290,7 @@ class Bpod(serial.Serial):
             description_array = self.hardware["output_description_array"]
             constructor = self.Output
         else:
-            raise Exception("parameter direction must be either 'input' or 'output'.")
+            raise BpodException("direction must be either 'input' or 'output'.")
 
         out = dict()
         for i in range(len(description_array)):
@@ -305,16 +309,19 @@ class Bpod(serial.Serial):
         return out
 
     class _IO:
-        def __init__(self, parent: Bpod, index: int, io_type: bytes, name: str):
-            if index == 0:
-                raise Exception("Bpod I/O uses one-based indexing.")
+        def __init__(self, bpod: Bpod, index: int, io_type: bytes, name: str):
             self._io_type = io_type
             self.index = index
             self.name = name
-            self._query = parent.query
-            self._write = parent.write
+            self._query = bpod.query
+            self._write = bpod.write
 
     class Input(_IO):
+        def __init__(self, bpod: Bpod, index: int, *args, **kwargs):
+            if index not in range(1, bpod.hardware["n_inputs"] + 1):
+                raise BpodException("Index out out of range")
+            super().__init__(bpod, index, *args, **kwargs)
+
         def read(self) -> bool:
             return self._query(["I", self.index], 1) == b"\x01"
 
@@ -325,6 +332,11 @@ class Bpod(serial.Serial):
             pass
 
     class Output(_IO):
+        def __init__(self, bpod: Bpod, index: int, *args, **kwargs):
+            if index not in range(1, bpod.hardware["n_outputs"] + 1):
+                raise BpodException("Index out out of range")
+            super().__init__(bpod, index, *args, **kwargs)
+
         def override(self, state: bool | np.uint8) -> None:
             if self._io_type in [b"D", b"B", b"W"]:
                 state = state > 0
