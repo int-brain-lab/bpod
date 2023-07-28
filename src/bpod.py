@@ -3,6 +3,7 @@ from typing import Literal, NoReturn
 import logging
 import threading
 
+from serial.threaded import ReaderThread, Protocol
 import numpy as np
 import serial
 
@@ -12,6 +13,19 @@ logging.basicConfig(
     level=logging.DEBUG,
 )
 log = logging.getLogger(__name__)
+
+
+class SerialReaderProtocolRaw(Protocol):
+    def connection_made(self, transport):
+        """Called when reader thread is started"""
+        print("Connected, ready to receive data...")
+
+    def data_received(self, data):
+        """Called with snippets received from the serial port"""
+        print(data.decode())
+
+    def connection_lost(self, exc):
+        log.info(exc)
 
 
 class Bpod(serial.Serial):
@@ -29,6 +43,7 @@ class Bpod(serial.Serial):
     output: dict = dict()
     _instances: dict = dict()
     _lock = threading.Lock()
+    _reader: ReaderThread = None
 
     def __new__(cls, port: str | None = None, **kwargs) -> Bpod:
         if port is not None and not isinstance(port, np.compat.basestring):
@@ -73,6 +88,7 @@ class Bpod(serial.Serial):
         log.info("Connecting to Bpod ...")
         super().open()
         log.debug("Serial port '{}' opened.".format(self.portstr))
+        self._reader = ReaderThread(self, SerialReaderProtocolRaw)
 
         if not self.handshake():
             raise Exception("Handshake failed")
