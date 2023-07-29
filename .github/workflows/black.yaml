@@ -11,5 +11,5 @@ jobs:
         with:
           options: "--check --verbose"
           src: "./src"
-          jupyter: true
-          version: "21.5b1"
+          jupyter: false
+          version: "22.3.0"
