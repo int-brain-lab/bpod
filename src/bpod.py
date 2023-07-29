@@ -300,7 +300,15 @@ class _Channels(object):
                 continue
             n = _io_string[:idx].count(io_key) + 1
             name = "{}{}".format(io_dict[io_key], n)
-            setattr(self, name, _child_class(bpod, io_key, n))
+            setattr(self, name, _child_class(bpod, name, io_key, n))
+
+    def __iter__(self):
+        children = [v for (k, v) in self.__dict__.items() if isinstance(v, _Channel)]
+        yield from children
+
+    def __str__(self):
+        children = [c.name for c in list(self)]
+        return children.__str__()
 
 
 class Outputs(_Channels):
@@ -312,13 +320,17 @@ class Inputs(_Channels):
 
 
 class _Channel(object):
-    def __init__(self, bpod: Bpod, io_type: bytes, index: int):
-        self._io_type = io_type
-        self._index = index
+    def __init__(self, bpod: Bpod, name: str, io_type: bytes, index: int):
+        self.name = name
+        self.io_type = io_type
+        self.index = index
         self._query = bpod.query
         self._write = bpod.write
         if index not in range(1, bpod.hardware["n_outputs"] + 1):
             raise BpodException("Index out out of range")
+
+    def __str__(self):
+        return self.name
 
 
 class Input(_Channel):
