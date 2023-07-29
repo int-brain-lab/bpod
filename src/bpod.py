@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Literal, NoReturn
+from typing import NoReturn, Type
 import logging
 import threading
 
@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 class SerialReaderProtocolRaw(Protocol):
     def connection_made(self, transport):
         """Called when reader thread is started"""
-        print("Connected, ready to receive data...")
+        print("Threaded serial reader started - ready to receive data...")
 
     def data_received(self, data):
         """Called with snippets received from the serial port"""
@@ -38,16 +38,8 @@ class Bpod(serial.Serial):
     The Bpod class extends the :class:`serial.Serial` class.
     """
 
-    version: dict = dict()
-
-    hardware: dict = dict()
-    """Dictionary containing information about the hardware."""
-
-    input: dict = dict()
-    output: dict = dict()
     _instances: dict = dict()
     _lock = threading.Lock()
-    _reader: ReaderThread = None
 
     def __new__(cls, port: str | None = None, **kwargs) -> Bpod:
         if port is not None and not isinstance(port, np.compat.basestring):
@@ -67,6 +59,13 @@ class Bpod(serial.Serial):
             kwargs["baudrate"] = 1312500
         super().__init__(**kwargs)
         super().setPort(port)
+
+        self.version: dict = dict()
+        self.hardware: dict = dict()
+        self.input: Inputs = Type[Inputs]
+        self.output: Outputs = Type[Outputs]
+        self._reader = ReaderThread(self, SerialReaderProtocolRaw)
+
         if port is not None and connect is True:
             self.open()
 
@@ -92,7 +91,6 @@ class Bpod(serial.Serial):
         log.info("Connecting to Bpod ...")
         super().open()
         log.debug("Serial port '{}' opened.".format(self.portstr))
-        self._reader = ReaderThread(self, SerialReaderProtocolRaw)
 
         if not self.handshake():
             raise BpodException("Handshake failed")
@@ -136,8 +134,8 @@ class Bpod(serial.Serial):
         self.hardware["output_description_array"] = hw[-self.hardware["n_outputs"] :]
 
         log.debug("Configuring I/O ...")
-        self.input = self._create_io("input")
-        self.output = self._create_io("output")
+        self.input = Inputs(self)
+        self.output = Outputs(self)
 
     def close(self):
         if not self.is_open:
@@ -282,64 +280,60 @@ class Bpod(serial.Serial):
                 data = serial.to_bytes(data)
         return data
 
-    def _create_io(self, direction: Literal["input", "output"]) -> dict:
-        if direction == "input":
-            description_array = self.hardware["input_description_array"]
-            constructor = self.Input
-        elif direction == "output":
-            description_array = self.hardware["output_description_array"]
-            constructor = self.Output
-        else:
-            raise BpodException("direction must be either 'input' or 'output'.")
 
-        out = dict()
-        for i in range(len(description_array)):
-            io_type = description_array[i : i + 1]
-            match io_type:
-                case b"B":
-                    name = "BNC"
-                case b"V":
-                    name = "Valve"
-                case b"P":
-                    name = "PWM"
-                case b"W":
-                    name = "Wire"
-                case _:
-                    continue
-            name = "{}{}".format(name, description_array[:i].count(io_type) + 1)
-            out[name] = constructor(self, i, io_type, name)
-        return out
+class _Channels(object):
+    def __init__(self, bpod: Bpod):
+        match type(self).__name__:
+            case "Inputs":
+                _io_string = bpod.hardware["input_description_array"]
+                _child_class = Input
+            case "Outputs":
+                _io_string = bpod.hardware["output_description_array"]
+                _child_class = Output
+            case _:
+                raise BpodException("Unknown channel type.")
 
-    class _IO:
-        def __init__(self, bpod: Bpod, index: int, io_type: bytes, name: str):
-            self._io_type = io_type
-            self.index = index
-            self.name = name
-            self._query = bpod.query
-            self._write = bpod.write
+        io_dict = {b"B": "BNC", b"V": "Valve", b"P": "PWM", b"W": "Wire"}
+        for idx in range(len(_io_string)):
+            io_key = _io_string[idx].to_bytes(1, "little")
+            if io_key not in io_dict.keys():
+                continue
+            n = _io_string[:idx].count(io_key) + 1
+            name = "{}{}".format(io_dict[io_key], n)
+            setattr(self, name, _child_class(bpod, io_key, n))
 
-    class Input(_IO):
-        def __init__(self, bpod: Bpod, index: int, *args, **kwargs):
-            if index not in range(1, bpod.hardware["n_inputs"] + 1):
-                raise BpodException("Index out out of range")
-            super().__init__(bpod, index, *args, **kwargs)
 
-        def read(self) -> bool:
-            return self._query(["I", self.index], 1) == b"\x01"
+class Outputs(_Channels):
+    pass
 
-        def override(self, state: bool) -> None:
-            self._write(["V", state])
 
-        def enable(self, state: bool) -> None:
-            pass
+class Inputs(_Channels):
+    pass
 
-    class Output(_IO):
-        def __init__(self, bpod: Bpod, index: int, *args, **kwargs):
-            if index not in range(1, bpod.hardware["n_outputs"] + 1):
-                raise BpodException("Index out out of range")
-            super().__init__(bpod, index, *args, **kwargs)
 
-        def override(self, state: bool | np.uint8) -> None:
-            if self._io_type in [b"D", b"B", b"W"]:
-                state = state > 0
-            self._write(["O", self.index, state])
+class _Channel(object):
+    def __init__(self, bpod: Bpod, io_type: bytes, index: int):
+        self._io_type = io_type
+        self._index = index
+        self._query = bpod.query
+        self._write = bpod.write
+        if index not in range(1, bpod.hardware["n_outputs"] + 1):
+            raise BpodException("Index out out of range")
+
+
+class Input(_Channel):
+    def read(self) -> bool:
+        return self._query(["I", self._index], 1) == b"\x01"
+
+    def override(self, state: bool) -> None:
+        self._write(["V", state])
+
+    def enable(self, state: bool) -> None:
+        pass
+
+
+class Output(_Channel):
+    def override(self, state: bool | np.uint8) -> None:
+        if self._io_type in [b"D", b"B", b"W"]:
+            state = state > 0
+        self._write(["O", self._index, state])
