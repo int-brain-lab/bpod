@@ -335,7 +335,7 @@ class _Channel(object):
 
 class Input(_Channel):
     def read(self) -> bool:
-        return self._query(["I", self._index], 1) == b"\x01"
+        return self._query(["I", self.index], 1) == b"\x01"
 
     def override(self, state: bool) -> None:
         self._write(["V", state])
@@ -346,6 +346,6 @@ class Input(_Channel):
 
 class Output(_Channel):
     def override(self, state: bool | np.uint8) -> None:
-        if self._io_type in [b"D", b"B", b"W"]:
+        if self.io_type in [b"D", b"B", b"W"]:
             state = state > 0
-        self._write(["O", self._index, state])
+        self._write(["O", self.index, state])
