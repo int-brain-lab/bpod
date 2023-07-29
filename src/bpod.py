@@ -326,8 +326,6 @@ class _Channel(object):
         self.index = index
         self._query = bpod.query
         self._write = bpod.write
-        if index not in range(1, bpod.hardware["n_outputs"] + 1):
-            raise BpodException("Index out out of range")
 
     def __str__(self):
         return self.name
