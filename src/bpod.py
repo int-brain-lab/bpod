@@ -300,7 +300,7 @@ class _Channels(object):
                 continue
             n = _io_string[:idx].count(io_key) + 1
             name = "{}{}".format(io_dict[io_key], n)
-            setattr(self, name, _child_class(bpod, name, io_key, n))
+            setattr(self, name, _child_class(bpod, name, io_key, idx))
 
     def __iter__(self):
         children = [v for (k, v) in self.__dict__.items() if isinstance(v, _Channel)]
