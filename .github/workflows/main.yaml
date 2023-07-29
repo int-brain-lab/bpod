@@ -1,4 +1,4 @@
-name: Bpod
+name: flake8 and unit-tests
 
 on:
   push:
@@ -42,5 +42,4 @@ jobs:
         shell: bash -l {0}
         run: |
           cd bpod
-          cd tests
           python -m unittest discover
