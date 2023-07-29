@@ -1,7 +1,8 @@
 name: Docs
-push:
-  branches:
-    - develop
+on:
+  push:
+    branches:
+      - develop
 permissions:
     contents: write
 jobs:
