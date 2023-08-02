@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import NoReturn, Type
+from typing import NoReturn, Type, NamedTuple
 import logging
 import threading
 # from box import Box
@@ -63,8 +63,8 @@ class Bpod(serial.Serial):
 
         self.version: dict = dict()
         self.hardware: dict = dict()
-        self.inputs: Inputs = Type[Inputs]
-        self.outputs: Outputs = Type[Outputs]
+        self.inputs = None
+        self.outputs = None
         self.modules: Modules = Type[Modules]
         self._reader = ReaderThread(self, SerialReaderProtocolRaw)
 
@@ -90,7 +90,7 @@ class Bpod(serial.Serial):
         BpodException
             Handshake failed: The Bpod did not acknowledge our request.
         """
-        log.info("Connecting to Bpod ...")
+        log.info("Connecting to Bpod device ...")
         super().open()
         log.debug("Serial port '{}' opened.".format(self.portstr))
 
@@ -131,14 +131,29 @@ class Bpod(serial.Serial):
                 )
             )
         )
-        self.hardware["input_description_array"] = hw[9 : 9 + self.hardware["n_inputs"]]
+        self.hardware["input_description_array"] = hw[9: 9 + self.hardware["n_inputs"]]
         self.hardware["n_outputs"] = hw[9 + self.hardware["n_inputs"]]
-        self.hardware["output_description_array"] = hw[-self.hardware["n_outputs"] :]
+        self.hardware["output_description_array"] = hw[-self.hardware["n_outputs"]:]
 
-        log.debug("Configuring I/O ...")
-        self.inputs = Inputs(self)
-        self.outputs = Outputs(self)
-        self.modules = Modules(self)
+        log.debug("Configuring I/O ports")
+
+        def collect_channels(description: str, dictionary: dict, channel_class) -> NamedTuple[Channel]:
+            channels = []
+            types = []
+            for idx in range(len(description)):
+                io_key = description[idx:idx+1]
+                if io_key in dictionary.keys():
+                    n = description[:idx].count(io_key) + 1
+                    name = "{}{}".format(dictionary[io_key], n)
+                    channels.append(channel_class(self, name, io_key, idx))
+                    types.append((name,  channel_class))
+            tmp = NamedTuple(channel_class.__name__, types)
+            return tmp(*channels)
+
+        io_dict_input = {b"B": "BNC", b"V": "Valve", b"P": "Port", b"W": "Wire"}
+        io_dict_output = {b"B": "BNC", b"V": "Valve", b"P": "PWM", b"W": "Wire"}
+        self.inputs = collect_channels(self.hardware["input_description_array"], io_dict_input, Input)
+        self.outputs = collect_channels(self.hardware["output_description_array"], io_dict_output, Output)
 
         # log.debug("Configuring modules")
         # self.modules = Modules(self)
@@ -287,64 +302,7 @@ class Bpod(serial.Serial):
         return data
 
 
-class _Channels(object):
-    def __init__(self, bpod: Bpod):
-        match type(self).__name__:
-            case "Inputs":
-                _io_string = bpod.hardware["input_description_array"]
-                io_dict = {
-                    b"B": "BNC",
-                    b"V": "Valve",
-                    b"P": "Port",
-                    b"W": "Wire",
-                }
-                _child_class = Input
-            case "Outputs":
-                _io_string = bpod.hardware["output_description_array"]
-                io_dict = {
-                    b"B": "BNC",
-                    b"V": "Valve",
-                    b"P": "PWM",
-                    b"W": "Wire",
-                }
-                _child_class = Output
-            case _:
-                raise BpodException("Unknown channel type.")
-
-        children = []
-        for idx in range(len(_io_string)):
-            io_key = _io_string[idx:idx]
-            if io_key not in io_dict.keys():
-                continue
-            n = _io_string[:idx].count(io_key) + 1
-            name = "{}{}".format(io_dict[io_key], n)
-            children.append(_child_class(bpod, name, io_key, idx))
-            setattr(self, name, children[-1])
-        self._children = tuple(children)
-
-    def __iter__(self):
-        yield from self._children
-
-    def __str__(self):
-        children = [c.name for c in self._children]
-        return children.__str__()
-
-    def __len__(self):
-        return len(self._children)
-
-    def __getitem__(self, i):
-        return self._children[i]
-
-
-class Outputs(_Channels):
-    pass
-
-
-class Inputs(_Channels):
-    pass
-
-
-class _Channel(object):
+class Channel(object):
     def __init__(self, bpod: Bpod, name: str, io_type: bytes, index: int):
         self.name = name
         self.io_type = io_type
@@ -356,7 +314,7 @@ class _Channel(object):
         return self.name
 
 
-class Input(_Channel):
+class Input(Channel):
     def read(self) -> bool:
         return self._query(["I", self.index], 1) == b"\x01"
 
@@ -367,7 +325,7 @@ class Input(_Channel):
         pass
 
 
-class Output(_Channel):
+class Output(Channel):
     def override(self, state: bool | np.uint8) -> None:
         if self.io_type in [b"D", b"B", b"W"]:
             state = state > 0
