@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import NoReturn, Type, NamedTuple
 import logging
 import threading
+
 # from box import Box
 
 from serial.threaded import ReaderThread, Protocol
@@ -48,11 +49,15 @@ class Bpod(serial.Serial):
         with cls._lock:
             instance = Bpod._instances.get(port, None)
             if instance is None:
-                log.debug("Creating new Bpod instance for port '{}'".format(port or "None"))
+                log.debug(
+                    "Creating new Bpod instance for port '{}'".format(port or "None")
+                )
                 instance = super().__new__(cls)
                 Bpod._instances[port] = instance
             else:
-                log.debug("Using existing Bpod instance on port '{}'".format(port or "None"))
+                log.debug(
+                    "Using existing Bpod instance on port '{}'".format(port or "None")
+                )
             return instance
 
     def __init__(self, port: str | None = None, connect: bool = True, **kwargs) -> None:
@@ -131,29 +136,35 @@ class Bpod(serial.Serial):
                 )
             )
         )
-        self.hardware["input_description_array"] = hw[9: 9 + self.hardware["n_inputs"]]
+        self.hardware["input_description_array"] = hw[9 : 9 + self.hardware["n_inputs"]]
         self.hardware["n_outputs"] = hw[9 + self.hardware["n_inputs"]]
-        self.hardware["output_description_array"] = hw[-self.hardware["n_outputs"]:]
+        self.hardware["output_description_array"] = hw[-self.hardware["n_outputs"] :]
 
         log.debug("Configuring I/O ports")
 
-        def collect_channels(description: str, dictionary: dict, channel_class) -> NamedTuple[Channel]:
+        def collect_channels(
+            description: str, dictionary: dict, channel_class
+        ) -> NamedTuple[Channel]:
             channels = []
             types = []
             for idx in range(len(description)):
-                io_key = description[idx:idx+1]
+                io_key = description[idx : idx + 1]
                 if io_key in dictionary.keys():
                     n = description[:idx].count(io_key) + 1
                     name = "{}{}".format(dictionary[io_key], n)
                     channels.append(channel_class(self, name, io_key, idx))
-                    types.append((name,  channel_class))
+                    types.append((name, channel_class))
             tmp = NamedTuple(channel_class.__name__, types)
             return tmp(*channels)
 
         io_dict_input = {b"B": "BNC", b"V": "Valve", b"P": "Port", b"W": "Wire"}
         io_dict_output = {b"B": "BNC", b"V": "Valve", b"P": "PWM", b"W": "Wire"}
-        self.inputs = collect_channels(self.hardware["input_description_array"], io_dict_input, Input)
-        self.outputs = collect_channels(self.hardware["output_description_array"], io_dict_output, Output)
+        self.inputs = collect_channels(
+            self.hardware["input_description_array"], io_dict_input, Input
+        )
+        self.outputs = collect_channels(
+            self.hardware["output_description_array"], io_dict_output, Output
+        )
 
         # log.debug("Configuring modules")
         # self.modules = Modules(self)
@@ -338,29 +349,32 @@ class Modules(object):
         self.update_modules()
 
     def update_modules(self):
-        self._bpod.write(b"M")
-        modules = [None] * self._bpod.hardware["output_description_array"].count(b"U")
-        for i in range(len(modules)):
-            if self._bpod.read() == bytes([1]):
-                continue
+        pass
+        # self._bpod.write(b"M")
+        # modules = [None] * self._bpod.hardware["output_description_array"].count(b"U")
+        # for i in range(len(modules)):
+        #     if self._bpod.read() == bytes([1]):
+        #         continue
 
 
 class Module(object):
-    def __init__(self, bpod: Bpod, port: int, **kwargs):
-
-        super().__init_subclass__(**kwargs)
-        self._bpod = bpod
-        self.port = port
-        self.firmware_version = bpod.read(4, np.uint32)[0]
-        self.name = bpod.read(int(bpod.read())).decode('utf-8')
-        while bpod.read() == b'\x01':
-            match bpod.read():
-                case b'#':
-                    module["number_of_events"] = self._bpod.read(1, np.uint8)[0]
-                case b'E':
-                    for event_index in range(self._bpod.read(1, np.uint8)[0]):
-                        length_of_event_name = self._bpod.read(1, np.uint8)[0]
-                        module["events"]["index"] = event_index
-                        module["events"]["name"] = self._bpod.read(length_of_event_name, str)[0]
-            modules[i] = module
-        self._children = modules
+    pass
+    # def __init__(self, bpod: Bpod, port: int, **kwargs):
+    #     super().__init_subclass__(**kwargs)
+    #     self._bpod = bpod
+    #     self.port = port
+    #     self.firmware_version = bpod.read(4, np.uint32)[0]
+    #     self.name = bpod.read(int(bpod.read())).decode("utf-8")
+    #     while bpod.read() == b"\x01":
+    #         match bpod.read():
+    #             case b"#":
+    #                 self."number_of_events"] = self._bpod.read(1, np.uint8)[0]
+    #             case b"E":
+    #                 for event_index in range(self._bpod.read(1, np.uint8)[0]):
+    #                     length_of_event_name = self._bpod.read(1, np.uint8)[0]
+    #                     module["events"]["index"] = event_index
+    #                     module["events"]["name"] = self._bpod.read(
+    #                         length_of_event_name, str
+    #                     )[0]
+    #         modules[i] = module
+    #     self._children = modules
