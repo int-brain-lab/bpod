@@ -2,3 +2,4 @@ mock-serial
 numpy
 pyserial
 setuptools
+#python-box[all]>=7.0,<8.0
