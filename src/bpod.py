@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import NoReturn, Type
 import logging
 import threading
+# from box import Box
 
 from serial.threaded import ReaderThread, Protocol
 import numpy as np
@@ -47,11 +48,11 @@ class Bpod(serial.Serial):
         with cls._lock:
             instance = Bpod._instances.get(port, None)
             if instance is None:
-                log.debug("Creating new instance for port '{}'".format(port or "None"))
+                log.debug("Creating new Bpod instance for port '{}'".format(port or "None"))
                 instance = super().__new__(cls)
                 Bpod._instances[port] = instance
             else:
-                log.debug("Using existing instance on port '{}'".format(port or "None"))
+                log.debug("Using existing Bpod instance on port '{}'".format(port or "None"))
             return instance
 
     def __init__(self, port: str | None = None, connect: bool = True, **kwargs) -> None:
@@ -138,6 +139,9 @@ class Bpod(serial.Serial):
         self.inputs = Inputs(self)
         self.outputs = Outputs(self)
         self.modules = Modules(self)
+
+        # log.debug("Configuring modules")
+        # self.modules = Modules(self)
 
     def close(self):
         if not self.is_open:
@@ -372,17 +376,33 @@ class Output(_Channel):
 
 class Modules(object):
     def __init__(self, bpod: Bpod):
-        self.bpod = bpod
+        self._bpod = bpod
         self.update_modules()
-        # self._children = tuple(children)
 
     def update_modules(self):
-        self.bpod.write(b"M")
-        modules = []
-        for m in range(self.bpod.hardware["input_description_array"].count(b"U")):
-            if self.bpod.read() == bytes([0]):
+        self._bpod.write(b"M")
+        modules = [None] * self._bpod.hardware["output_description_array"].count(b"U")
+        for i in range(len(modules)):
+            if self._bpod.read() == bytes([1]):
                 continue
-            else:
-                module = 42  # TO DO
-                modules.append(module)
-                pass
+
+
+class Module(object):
+    def __init__(self, bpod: Bpod, port: int, **kwargs):
+
+        super().__init_subclass__(**kwargs)
+        self._bpod = bpod
+        self.port = port
+        self.firmware_version = bpod.read(4, np.uint32)[0]
+        self.name = bpod.read(int(bpod.read())).decode('utf-8')
+        while bpod.read() == b'\x01':
+            match bpod.read():
+                case b'#':
+                    module["number_of_events"] = self._bpod.read(1, np.uint8)[0]
+                case b'E':
+                    for event_index in range(self._bpod.read(1, np.uint8)[0]):
+                        length_of_event_name = self._bpod.read(1, np.uint8)[0]
+                        module["events"]["index"] = event_index
+                        module["events"]["name"] = self._bpod.read(length_of_event_name, str)[0]
+            modules[i] = module
+        self._children = modules
