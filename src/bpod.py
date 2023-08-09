@@ -575,7 +575,7 @@ class Bpod(serial.Serial):
             case list():
                 data = b"".join([Bpod.to_bytes(item) for item in data])
             case _:
-                data = serial.to_bytes(data)
+                data = serial.to_bytes(data)  # type: ignore
         return data
 
     def update_modules(self):
