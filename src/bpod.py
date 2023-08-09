@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import ctypes
 from abc import abstractmethod
-from typing import NamedTuple, Any, Sequence, Union, Optional, Generator, overload
+from collections.abc import Iterator
+from typing import NamedTuple, Any, Sequence, Union, Optional, overload, TYPE_CHECKING
 import logging
 import threading
 from struct import pack_into, unpack, calcsize
@@ -12,7 +13,6 @@ from serial.threaded import ReaderThread, Protocol
 from serial.tools import list_ports
 import numpy as np
 
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from _typeshed import ReadableBuffer  # noqa:401
@@ -314,18 +314,16 @@ class Bpod(serial.Serial):
             channels = []
             types = []
 
-            for idx, io_key in enumerate(description):
-                if io_key in dictionary.keys():
+            for idx in range(len(description)):
+                io_key = description[idx : idx + 1]
+                if bytes(io_key) in dictionary.keys():
                     n = description[:idx].count(io_key) + 1
                     name = f"{dictionary[io_key]}{n}"
                     channels.append(channel_cls(self, name, io_key, idx))
                     types.append((name, channel_cls))
 
-            collection_name = channel_cls.__name__.lower() + "s"
-            tmp = NamedTuple(
-                collection_name, types
-            )  # replace with dataclass? or simplenamespace!
-            setattr(self, collection_name, tmp(*channels))
+            cls_name = f"{channel_cls.__name__.lower()}s"
+            setattr(self, cls_name, NamedTuple(cls_name, types)._make(channels))
 
         log.debug("Configuring I/O ports")
         input_dict = {b"B": "BNC", b"V": "Valve", b"P": "Port", b"W": "Wire"}
@@ -374,9 +372,8 @@ class Bpod(serial.Serial):
         return success
 
     @staticmethod
-    def find() -> Generator[str, None, None]:
-        """
-        Discover serial ports used by Bpod devices.
+    def find() -> Iterator[str]:
+        """Discover serial ports used by Bpod devices.
 
         This static method scans through the list of available serial ports and
         identifies ports that are in use by a Bpod device. It does so by briefly opening
@@ -403,10 +400,10 @@ class Bpod(serial.Serial):
 
             for port in Bpod.find():
                 print(f"Bpod on {port}")
-            # Bpod on port COM3
+            # Bpod on COM3
             # Bpod on COM6
         """
-        for port in [p for p in list_ports.comports()]:
+        for port in (p for p in list_ports.comports() if p.vid == 0x16C0):
             try:
                 with serial.Serial(port.device, timeout=0.2) as ser:
                     if ser.read(1) == bytes([222]):
@@ -476,7 +473,7 @@ class Bpod(serial.Serial):
         then as a tuple of two unsigned short integers:
 
         .. code-block:: python
-            :emphasize-lines: 4,5,8,9
+            :emphasize-lines: 3,4,7,8
 
             my_bpod.write(b"F")
             1
@@ -642,7 +639,7 @@ class Input(Channel):
         *args, **kwargs
             Arguments to be passed to the base class constructor.
         """
-        super().__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def read(self) -> bool:
         """
@@ -688,7 +685,7 @@ class Output(Channel):
         *args, **kwargs
             Arguments to be passed to the base class constructor.
         """
-        super().__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def override(self, state: Union[bool, int]) -> None:
         """
