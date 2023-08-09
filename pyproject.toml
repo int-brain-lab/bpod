@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bpod"
+version = "1.0.0"
+description = "python module for interfacing with a Bpod finite state machine"
+requires-python = ">=3.10"
+keywords = ["bpod"]
+authors = [
+    {name = "Florian Rau", email = "florian.rau@internationalbrainlab.com"},
+]
+dependencies = [
+#    "requests",
+#    "gidgethub[httpx]>4.0.0",
+]
+
+#[tool.blue]
+#line-length = 88
+#target-version = ["py38", "py39"]
+
+[tool.mypy]
+files = "./src/*.py"
+python_version = "3.10"
+ignore_missing_imports = "True"

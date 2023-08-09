@@ -2,8 +2,6 @@ import unittest
 import platform
 import logging
 
-import numpy as np
-
 from src.bpod import Bpod
 
 try:
@@ -62,14 +60,13 @@ class TestSerial(unittest.TestCase):
         bpod = Bpod(port=device.port, timeout=0.1)
         assert bpod.is_open
         assert bpod.query(b"A") == b"B"
-        assert bpod.query(np.uint8(65)) == b"B"
-        assert bpod.query([np.uint8(66), "a"], 2) == b"OK"
+        assert bpod.query(b"Ba", "<2s") == (b"OK",)
         bpod.close()
         assert not bpod.is_open
 
     def test_initialization(self):
         bpod = Bpod(port=device.port, timeout=0.1)
-        assert bpod.version["major"] == 22
-        assert bpod.hardware["input_description_array"] == b"UUUUUXBBPPPP"
-        assert bpod.hardware["output_description_array"] == b"UUUUUXBBPPPPVVVV"
+        assert bpod.info.firmware_version == (22, 0)
+        assert bpod.info.input_description_array == b"UUUUUXBBPPPP"
+        assert bpod.info.output_description_array == b"UUUUUXBBPPPPVVVV"
         bpod.close()

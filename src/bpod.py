@@ -1,13 +1,21 @@
 from __future__ import annotations
-from typing import NoReturn, Type, NamedTuple
+
+import ctypes
+from abc import abstractmethod
+from typing import NamedTuple, Any, Sequence, Union, Optional, Generator, overload
 import logging
 import threading
+from struct import pack_into, unpack, calcsize
 
-# from box import Box
-
-from serial.threaded import ReaderThread, Protocol
-import numpy as np
 import serial
+from serial.threaded import ReaderThread, Protocol
+from serial.tools import list_ports
+import numpy as np
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from _typeshed import ReadableBuffer  # noqa:401
 
 logging.basicConfig(
     format="%(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -37,41 +45,174 @@ class BpodException(Exception):
 class Bpod(serial.Serial):
     """Class for interfacing a Bpod Finite State Machine.
 
-    The Bpod class extends the :class:`serial.Serial` class.
+    The Bpod class extends :class:`serial.Serial`.
+
+    Parameters
+    ----------
+    port : str, optional
+        The serial port for the Bpod device, or None to automatically detect a Bpod.
+    connect : bool, default: True
+        Whether to connect to the Bpod device. If True and 'port' is None, an
+        attempt will be made to automatically find and connect to a Bpod device.
+    **kwargs
+        Additional keyword arguments passed to :class:`serial.Serial`.
+
+    Examples
+    --------
+
+    * Try to automatically find a Bpod device and connect to it.
+
+        .. code-block:: python
+
+            my_bpod = Bpod()
+
+    * Connect to a Bpod device on COM3
+
+        .. code-block:: python
+
+            my_bpod = Bpod('COM3')
+
+    * Instantiate a Bpod object for a device on COM3 but only connect to it later.
+
+        .. code-block:: python
+
+            my_bpod = Bpod(port = "COM3", connect = False)
+            # (do other things)
+            my_bpod.open()
     """
 
     _instances: dict = dict()
-    _lock = threading.Lock()
+    _instantiated = False
+    _lock: threading.Lock = threading.Lock()
 
-    def __new__(cls, port: str | None = None, **kwargs) -> Bpod:
-        if port is not None and not isinstance(port, np.compat.basestring):
-            raise ValueError("'port' must be None or a string")
+    class _Info(NamedTuple):
+        firmware_version: tuple[int, int]
+        machine_type: int
+        machine_type_string: str
+        pcb_revision: int
+        max_states: int
+        timer_period: int
+        max_serial_events: int
+        max_bytes_per_serial_message: int
+        n_global_timers: int
+        n_global_counters: int
+        n_conditions: int
+        n_inputs: int
+        input_description_array: bytes
+        n_outputs: int
+        output_description_array: bytes
+
+    def __new__(
+        cls, port: Optional[str] = None, connect: Optional[bool] = True, **kwargs
+    ) -> Bpod:
+        """
+        Create or retrieve a singleton instance of the Bpod class.
+
+        This method implements a singleton pattern for the Bpod class, ensuring that
+        only one instance is created for a given port. If an instance already exists
+        for the specified port, that instance is returned.
+
+        Parameters
+        ----------
+        port : str, optional
+            The serial port for the Bpod device, or None to automatically detect a Bpod.
+        connect : bool, optional
+            Whether to connect to the Bpod device. If True and 'port' is None, an
+            attempt will be made to automatically find and connect to a Bpod device.
+        **kwargs
+            Additional keyword arguments passed to serial.Serial.
+
+        Returns
+        -------
+        Bpod
+            A singleton instance of the Bpod class.
+
+        Raises
+        ------
+        ValueError
+            If 'port' is not a string and is not None.
+
+        Notes
+        -----
+        The singleton instances are managed by a class-level lock and dictionary.
+        Automatic Bpod detection relies on the find method.
+
+        Example
+        -------
+        To create or retrieve a Bpod instance on a specific port:
+
+        .. code-block:: python
+            bpod_instance = Bpod(port='COM3')
+
+        To automatically detect and create or retrieve a Bpod instance:
+
+        .. code-block:: python
+            bpod_instance = Bpod()
+        """
+        if not isinstance(port, str) and port is not None:
+            raise ValueError("Parameter 'port' must be a string or None.")
+
+        # try to automagically find a Bpod device
+        if port is None and connect is True:
+            port = next(iter(Bpod._instances.keys()), next(cls.find(), None))
+
+        # implement singleton
         with cls._lock:
             instance = Bpod._instances.get(port, None)
             if instance is None:
-                log.debug(
-                    "Creating new Bpod instance for port '{}'".format(port or "None")
-                )
+                log.debug(f"Creating new Bpod instance on {port}")
                 instance = super().__new__(cls)
                 Bpod._instances[port] = instance
             else:
-                log.debug(
-                    "Using existing Bpod instance on port '{}'".format(port or "None")
-                )
+                log.debug(f"Using existing Bpod instance on {port}")
             return instance
 
-    def __init__(self, port: str | None = None, connect: bool = True, **kwargs) -> None:
+    def __init__(
+        self, port: Optional[str] = None, connect: Optional[bool] = True, **kwargs
+    ) -> None:
+        """
+        Initialize a Bpod instance.
+
+        This method initializes a Bpod instance, allowing communication with a Bpod
+        device over a specified serial port.
+
+        Parameters
+        ----------
+        port : str, optional
+            The serial port for the Bpod device. If None and 'connect' is True, an
+            attempt will be made to automatically detect and use a Bpod port.
+        connect : bool, optional
+            Whether to establish a connection to the Bpod device. If True and 'port' is
+            None, automatic port detection will be attempted.
+        **kwargs
+            Additional keyword arguments to be passed to the constructor of
+            serial.Serial.
+
+        Notes
+        -----
+        -   If the Bpod instance is already instantiated, the method returns without
+            further action.
+        -   If 'port' is 'None' and 'connect' is True the former value may be
+            overridden based on existing instances
+        """
+        if self._instantiated:
+            return
+
+        # override port kwarg when using automatic port discovery (see __new__)
+        if port is None and connect is True:
+            port = next((k for (k, v) in self._instances.items() if v is self), None)
+
+        # initiate super class
         if "baudrate" not in kwargs:
             kwargs["baudrate"] = 1312500
         super().__init__(**kwargs)
-        super().setPort(port)
+        self.port = port
 
-        self.version: dict = dict()
-        self.hardware: dict = dict()
+        self.info: Bpod._Info | None = None
         self.inputs = None
         self.outputs = None
-        self.modules: Modules = Type[Modules]
-        self._reader = ReaderThread(self, SerialReaderProtocolRaw)
+        self._reader: ReaderThread = ReaderThread(self, SerialReaderProtocolRaw)
+        self._instantiated = True
 
         if port is not None and connect is True:
             self.open()
@@ -79,12 +220,48 @@ class Bpod(serial.Serial):
     def __del__(self) -> None:
         self.close()
         with self._lock:
-            if self._port in Bpod._instances:
-                log.debug("Deleting instance on port '{}'".format(self.port or "None"))
-                Bpod._instances.pop(self._port)
+            if self.port in Bpod._instances:
+                log.debug(f"Deleting instance on {self.port}")
+                Bpod._instances.pop(self.port)
 
-    def setPort(self, port) -> NoReturn:
-        """Overwrite setPort() method of parent class."""
+    def __repr__(self):
+        return f"Bpod(port={self.port})"
+
+    @property
+    def port(self) -> Union[str, None]:
+        """
+        Get the communication port used for the Bpod device.
+
+        Returns
+        -------
+        str
+            The serial port (e.g., 'COM3', '/dev/ttyUSB0') used by the Bpod device.
+        """
+        return super().port
+
+    @port.setter
+    def port(self, port):
+        """
+        Set the communication port for the Bpod device.
+
+        This setter allows changing the communication port before the object is
+        instantiated. Once the object is instantiated, attempting to change the port
+        will raise a BpodException.
+
+        Parameters
+        ----------
+        port : str
+            The new communication port to be set (e.g., 'COM3', '/dev/ttyUSB0').
+
+        Raises
+        ------
+        BpodException
+            If an attempt is made to change the port after the object has been
+            instantiated.
+        """
+        if not self._instantiated:
+            super(type(self), type(self)).port.fset(self, port)
+            return
         raise BpodException("Port cannot be changed after instantiation.")
 
     def open(self) -> None:
@@ -97,193 +274,285 @@ class Bpod(serial.Serial):
         """
         log.info("Connecting to Bpod device ...")
         super().open()
-        log.debug("Serial port '{}' opened.".format(self.portstr))
+        log.debug(f"Serial port {self.port} opened")
 
+        # try to perform handshake
         if not self.handshake():
             raise BpodException("Handshake failed")
         log.debug("Handshake successful")
 
-        # get Bpod version & machine type
-        self.version["major"], self.hardware["machine_type"] = self.query(
-            "F", 4, np.uint16
-        )
-        self.version["minor"] = (
-            self.query("f", 2, np.uint16)
-            if self.version["major"] > 22
-            else np.uint16(0)
-        )
-        log.info("Firmware v%d.%d", self.version["major"], self.version["minor"])
+        # get firmware version, machine type & PCB revision
+        v_major, machine_type = self.query(b"F", "<2H")
+        version = (v_major, self.query(b"f", "<H")[0] if v_major > 22 else 0)
+        machine_str = {1: "v0.5", 2: "r07+", 3: "r2.0-2.5", 4: "2+ r1.0"}[machine_type]
+        pcb_rev = self.query(b"v", "<B")[0] if v_major > 22 else None
 
-        log.debug("Obtaining hardware configuration ...")
-        hw, s = self.query_chunks(b"H", 3, 9)
-        self.hardware.update(
-            dict(
-                zip(["max_states", "timer_period"], np.frombuffer(hw, np.uint16, 2, 0))
-            )
-        )
-        self.hardware.update(
-            dict(
-                zip(
-                    [
-                        "max_serial_events",
-                        "n_global_timers",
-                        "n_global_counters",
-                        "n_conditions",
-                        "n_conditions",
-                        "n_inputs",
-                    ],
-                    np.frombuffer(hw, np.uint8, 6, 3),
-                )
-            )
-        )
-        self.hardware["input_description_array"] = hw[9 : 9 + self.hardware["n_inputs"]]
-        self.hardware["n_outputs"] = hw[9 + self.hardware["n_inputs"]]
-        self.hardware["output_description_array"] = hw[-self.hardware["n_outputs"] :]
+        # log hardware information
+        log.info("Bpod Finite State Machine " + machine_str)
+        log.info("Circuit board revision {pcb_rev}") if pcb_rev else None
+        log.info("Firmware version {}.{}".format(*version))
 
-        log.debug("Configuring I/O ports")
+        # get hardware description
+        info: list[Any] = [version, machine_type, machine_str, pcb_rev]
+        if v_major > 22:
+            info.extend(self.query(b"H", "<2H6B"))
+        else:
+            info.extend(self.query(b"H", "<2H5B"))
+            info.insert(-4, 3)  # max bytes per serial msg always = 3
+        info.extend(self.read(f"<{info[-1]}s1B"))
+        self.info = Bpod._Info(*info, *self.read(f"<{info[-1]}s"))
 
-        def collect_channels(
-            description: str, dictionary: dict, channel_class
-        ) -> NamedTuple[Channel]:
+        def collect_channels(description: bytes, dictionary: dict, channel_cls: type):
+            """
+            Generate a collection of channels based on the given description array and
+            dictionary.
+
+            This method takes a channel description array (as returned by the Bpod), a
+            dictionary mapping keys to names, and a channel class. It generates named
+            tuple instances and sets them as attributes on the current Bpod instance.
+            """
             channels = []
             types = []
-            for idx in range(len(description)):
-                io_key = description[idx : idx + 1]
+
+            for idx, io_key in enumerate(description):
                 if io_key in dictionary.keys():
                     n = description[:idx].count(io_key) + 1
-                    name = "{}{}".format(dictionary[io_key], n)
-                    channels.append(channel_class(self, name, io_key, idx))
-                    types.append((name, channel_class))
-            tmp = NamedTuple(channel_class.__name__, types)
-            return tmp(*channels)
+                    name = f"{dictionary[io_key]}{n}"
+                    channels.append(channel_cls(self, name, io_key, idx))
+                    types.append((name, channel_cls))
 
-        io_dict_input = {b"B": "BNC", b"V": "Valve", b"P": "Port", b"W": "Wire"}
-        io_dict_output = {b"B": "BNC", b"V": "Valve", b"P": "PWM", b"W": "Wire"}
-        self.inputs = collect_channels(
-            self.hardware["input_description_array"], io_dict_input, Input
-        )
-        self.outputs = collect_channels(
-            self.hardware["output_description_array"], io_dict_output, Output
-        )
+            collection_name = channel_cls.__name__.lower() + "s"
+            tmp = NamedTuple(
+                collection_name, types
+            )  # replace with dataclass? or simplenamespace!
+            setattr(self, collection_name, tmp(*channels))
+
+        log.debug("Configuring I/O ports")
+        input_dict = {b"B": "BNC", b"V": "Valve", b"P": "Port", b"W": "Wire"}
+        output_dict = {b"B": "BNC", b"V": "Valve", b"P": "PWM", b"W": "Wire"}
+        collect_channels(self.info.input_description_array, input_dict, Input)
+        collect_channels(self.info.output_description_array, output_dict, Output)
 
         # log.debug("Configuring modules")
         # self.modules = Modules(self)
 
     def close(self):
+        """
+        Disconnect the state machine and close the serial connection.
+
+        Example
+        -------
+            .. code-block:: python
+                :emphasize-lines: 3
+
+                my_bpod = Bpod("COM3")
+                # [Perform operations with the state machine]
+                my_bpod.close()
+        """
         if not self.is_open:
             return
-        log.debug("Disconnecting state machine.")
+        log.debug("Disconnecting state machine")
         self.write(b"Z")
         super().close()
-        log.debug("Serial port '{}' closed.".format(self.portstr))
+        log.debug(f"Serial port {self.port} closed")
 
     def handshake(self) -> bool:
-        """Try to perform a handshake with a Bpod Finite State Machine.
+        """
+        Try to perform handshake with Bpod device.
 
         Returns
         -------
         bool
             True if successful, False otherwise.
-        """
-        return self.query(b"6") == b"5"
 
-    def write(self, data: any) -> int:
-        """Read data from the Bpod.
+        Notes
+        -----
+        This will reset the state machine's session clock and flush the serial port.
+        """
+        success = self.query(b"6") == b"5"
+        self.reset_input_buffer()
+        return success
+
+    @staticmethod
+    def find() -> Generator[str, None, None]:
+        """
+        Discover serial ports used by Bpod devices.
+
+        This static method scans through the list of available serial ports and
+        identifies ports that are in use by a Bpod device. It does so by briefly opening
+        each port and checking for a specific byte pattern (byte 222). Ports matching
+        this pattern are yielded.
+
+        Yields
+        ------
+        str
+            The names of available serial ports compatible with the Bpod device.
+
+        Notes
+        -----
+        The method employs a brief timeout when opening each port to minimize the impact
+        on system resources.
+
+        SerialException is caught and ignored, allowing the method to continue scanning
+        even if certain ports encounter errors during opening.
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            for port in Bpod.find():
+                print(f"Bpod on {port}")
+            # Bpod on port COM3
+            # Bpod on COM6
+        """
+        for port in [p for p in list_ports.comports()]:
+            try:
+                with serial.Serial(port.device, timeout=0.2) as ser:
+                    if ser.read(1) == bytes([222]):
+                        yield port.device
+            except serial.SerialException:
+                pass
+
+    def write(self, data: Union[tuple[Sequence[Any], str], Any]) -> Union[int, None]:
+        """Write data to the Bpod.
 
         Parameters
         ----------
         data : any
             Data to be written to the Bpod.
+            See https://docs.python.org/3/library/struct.html#format-characters
 
         Returns
         -------
-        int
+        int or None
             Number of bytes written to the Bpod.
         """
-        return super().write(self.to_bytes(data))
+        if isinstance(data, tuple()):
+            size = calcsize(data[1])
+            buff = ctypes.create_string_buffer(size)
+            pack_into(data[1], buff, 0, *data[0])
+            return super().write(buff)
+        else:
+            return super().write(self.to_bytes(data))
 
-    def read(self, n_bytes: int = 1, dtype: type = bytes) -> bytes | np.ndarray:
-        """Read data from the Bpod.
+    @overload
+    def read(self, data_specifier: str) -> tuple[Any, ...]:
+        ...
+
+    @overload
+    def read(self, data_specifier: int = 1) -> bytes:
+        ...
+
+    def read(self, data_specifier=1):
+        """
+        Read data from the Bpod.
 
         Parameters
         ----------
-        n_bytes : int, default: 1
-            Number of bytes to receive from the Bpod.
-        dtype : type, default: bytes
-            Desired type of the returned data - by default: bytes. Any other data-type
-            will be returned as a NumPy array.
+        data_specifier : int or str, default: 1
+            The number of bytes to receive from the Bpod, or a format string for
+            unpacking.
+
+            When providing an integer, the specified number of bytes will be returned
+            as a bytestring. When providing a `format string`_, the data will be
+            unpacked into a tuple accordingly. Format strings follow the conventions of
+            the :mod:`struct` module.
+
+            .. _format string:
+                https://docs.python.org/3/library/struct.html#format-characters
 
         Returns
         -------
-        bytes | np.ndarray
-            Data returned by the Bpod. By default, the response is formatted as a
-            bytestring. You can alternatively request a NumPy array by specifying the
-            dtype argument (see above).
-        """
-        data = super().read(n_bytes)
-        return data if dtype is bytes else np.frombuffer(data, dtype)
+        bytes or tuple[Any]
+            Data returned by the Bpod. By default, data is formatted as a bytestring.
+            Alternatively, when provided with a format string, data will be unpacked
+            into a tuple according to the specified format string.
 
+        Examples
+        --------
+
+        Receive 4 bytes of data from a Bpod device - first interpreted as a bytestring,
+        then as a tuple of two unsigned short integers:
+
+        .. code-block:: python
+            :emphasize-lines: 4,5,8,9
+
+            my_bpod.write(b"F")
+            1
+            my_bpod.read(4)
+            b'\\x16\\x00\\x03\\x00'
+            my_bpod.write(b"F")
+            1
+            my_bpod.read('2H')
+            (22, 3)
+        """
+        if isinstance(data_specifier, str):
+            n_bytes = calcsize(data_specifier)
+            return unpack(data_specifier, super().read(n_bytes))
+        else:
+            return super().read(data_specifier)
+
+    @overload
     def query(
-        self, query: any, n_bytes: int = 1, dtype: type = bytes
-    ) -> bytes | np.ndarray:
+        self, query: Union[bytes, Sequence[Any]], data_specifier: int = 1
+    ) -> bytes:
+        ...
+
+    @overload
+    def query(
+        self, query: Union[bytes, Sequence[Any]], data_specifier: str
+    ) -> tuple[Any, ...]:
+        ...
+
+    def query(self, query, data_specifier=1):
         """Query data from the Bpod.
 
-        Parameters
-        ----------
-        query : any
-            Query to be sent to the Bpod.
-        n_bytes : int, default: 1
-            Number of bytes to receive from the Bpod.
-        dtype : type, default: bytes
-            Desired type of the returned data - by default: bytes. Any other data-type
-            will be returned as a NumPy array.
-
-        Returns
-        -------
-        bytes | np.ndarray
-            Data returned by the Bpod. By default, the response is formatted as a
-            bytestring. You can alternatively request a NumPy array by specifying the
-            dtype argument (see above).
-        """
-        self.write(query)
-        return self.read(n_bytes, dtype)
-
-    def query_chunks(self, query: any, n_chunks: int, first_len: int) -> (bytes, list):
-        """Receive multiple chunks of data from Bpod.
-
-        The last byte of each chunk (except the last one) determines the length of the
-        next chunk.
+        This method is a combination of :py:meth:`write` and :py:meth:`read`.
 
         Parameters
         ----------
         query : any
             Query to be sent to the Bpod.
-        n_chunks : int
-            Number of chunks to read.
-        first_len : int
-            Length of first chunk.
+        data_specifier : int or str, default: 1
+            The number of bytes to receive from the Bpod, or a format string for
+            unpacking.
+
+            When providing an integer, the specified number of bytes will be returned
+            as a bytestring. When providing a `format string`_, the data will be
+            unpacked into a tuple accordingly. Format strings follow the conventions of
+            the :py:mod:`struct` module.
+
+            .. _format string:
+                https://docs.python.org/3/library/struct.html#format-characters
 
         Returns
         -------
-        chunks : bytes
-            All chunks of data received from the Bpod, concatenated to a single
-            bytestring.
-        slices : slice
-            Slices for recovering individual data chunks from the bytestring.
+        bytes or tuple[Any]
+            Data returned by the Bpod. By default, data is formatted as a bytestring.
+            Alternatively, when provided with a format string, data will be unpacked
+            into a tuple according to the specified format string.
+
+
+        Examples
+        --------
+
+        Query 4 bytes of data from a Bpod device - first interpreted as a bytestring,
+        then as a tuple of two unsigned short integers:
+
+        .. code-block:: python
+            :emphasize-lines: 2
+
+            my_bpod.query(b"F", 4)
+            b'\\x16\\x00\\x03\\x00'
+            my_bpod.query(b"F", '2H')
+            (22, 3)
         """
         self.write(query)
-        out = b""
-        slices = [slice(0, first_len)]
-        n = first_len
-        for i in range(n_chunks):
-            out = b"".join([out, self.read(n)])
-            if i < (n_chunks - 1):
-                n = out[slices[i].stop - 1] + (i != n_chunks - 2)
-                slices.append(slice(slices[i].stop, slices[i].stop + n))
-        return out[: slices[-1].stop], slices
+        return self.read(data_specifier)
 
     @staticmethod
-    def to_bytes(data: any) -> bytes:
+    def to_bytes(data: Any) -> bytes:
         """Convert data to bytestring.
 
         This method extends :meth:`serial.to_bytes` with support for NumPy types,
@@ -303,7 +572,7 @@ class Bpod(serial.Serial):
             case np.ndarray() | np.generic():
                 data = data.tobytes()
             case int():
-                data = np.uint8(data)
+                data = data.to_bytes(1, "little")
             case str():
                 data = data.encode("utf-8")
             case list():
@@ -312,69 +581,129 @@ class Bpod(serial.Serial):
                 data = serial.to_bytes(data)
         return data
 
+    def update_modules(self):
+        pass
+        # self.write(b"M")
+        # modules = []
+        # for i in range(len(modules)):
+        #     if self.read() == bytes([1]):
+        #         continue
+        #     firmware_version = self.read(4, np.uint32)[0]
+        #     name = self.read(int(self.read())).decode("utf-8")
+        #     port = i + 1
+        #     m = Module()
+        #     while self.read() == b"\x01":
+        #         match self.read():
+        #             case b"#":
+        #                 number_of_events = self.read(1, np.uint8)[0]
+        #             case b"E":
+        #                 for event_index in range(self.read(1, np.uint8)[0]):
+        #                     l_event_name = self.read(1, np.uint8)[0]
+        #                     module["events"]["index"] = event_index
+        #                     module["events"]["name"] = self.read(l_event_name, str)[0]
+        #         modules[i] = module
+        #     self._children = modules
+
 
 class Channel(object):
+    @abstractmethod
     def __init__(self, bpod: Bpod, name: str, io_type: bytes, index: int):
+        """
+        Abstract base class representing a channel on the Bpod device.
+
+        Parameters
+        ----------
+        bpod : Bpod
+            The Bpod instance associated with the channel.
+        name : str
+            The name of the channel.
+        io_type : bytes
+            The I/O type of the channel (e.g., 'B', 'V', 'P').
+        index : int
+            The index of the channel.
+        """
         self.name = name
         self.io_type = io_type
         self.index = index
         self._query = bpod.query
         self._write = bpod.write
 
-    def __str__(self):
-        return self.name
+    def __repr__(self):
+        return self.__class__.__name__ + "()"
 
 
 class Input(Channel):
+    def __init__(self, *args, **kwargs):
+        """
+        Input channel class representing a digital input channel.
+
+        Parameters
+        ----------
+        *args, **kwargs
+            Arguments to be passed to the base class constructor.
+        """
+        super().__init__(self, *args, **kwargs)
+
     def read(self) -> bool:
+        """
+        Read the state of the input channel.
+
+        Returns
+        -------
+        bool
+            True if the input channel is active, False otherwise.
+        """
         return self._query(["I", self.index], 1) == b"\x01"
 
     def override(self, state: bool) -> None:
+        """
+        Override the state of the input channel.
+
+        Parameters
+        ----------
+        state : bool
+            The state to set for the input channel.
+        """
         self._write(["V", state])
 
     def enable(self, state: bool) -> None:
+        """
+        Enable or disable the input channel.
+
+        Parameters
+        ----------
+        state : bool
+            True to enable the input channel, False to disable.
+        """
         pass
 
 
 class Output(Channel):
-    def override(self, state: bool | np.uint8) -> None:
-        if self.io_type in [b"D", b"B", b"W"]:
+    def __init__(self, *args, **kwargs):
+        """
+        Output channel class representing a digital output channel.
+
+        Parameters
+        ----------
+        *args, **kwargs
+            Arguments to be passed to the base class constructor.
+        """
+        super().__init__(self, *args, **kwargs)
+
+    def override(self, state: Union[bool, int]) -> None:
+        """
+        Override the state of the output channel.
+
+        Parameters
+        ----------
+        state : Union[bool, int]
+            The state to set for the output channel. For binary I/O types, provide a
+            bool. For pulse width modulation (PWM) I/O types, provide an int (0-255).
+        """
+        if isinstance(state, int) and self.io_type in [b"D", b"B", b"W"]:
             state = state > 0
-        self._write(["O", self.index, state])
-
-
-class Modules(object):
-    def __init__(self, bpod: Bpod):
-        self._bpod = bpod
-        self.update_modules()
-
-    def update_modules(self):
-        pass
-        # self._bpod.write(b"M")
-        # modules = [None] * self._bpod.hardware["output_description_array"].count(b"U")
-        # for i in range(len(modules)):
-        #     if self._bpod.read() == bytes([1]):
-        #         continue
+        self._write(["O", self.index, state.to_bytes(1, "little")])
 
 
 class Module(object):
     pass
-    # def __init__(self, bpod: Bpod, port: int, **kwargs):
-    #     super().__init_subclass__(**kwargs)
-    #     self._bpod = bpod
-    #     self.port = port
-    #     self.firmware_version = bpod.read(4, np.uint32)[0]
-    #     self.name = bpod.read(int(bpod.read())).decode("utf-8")
-    #     while bpod.read() == b"\x01":
-    #         match bpod.read():
-    #             case b"#":
-    #                 self."number_of_events"] = self._bpod.read(1, np.uint8)[0]
-    #             case b"E":
-    #                 for event_index in range(self._bpod.read(1, np.uint8)[0]):
-    #                     length_of_event_name = self._bpod.read(1, np.uint8)[0]
-    #                     module["events"]["index"] = event_index
-    #                     module["events"]["name"] = self._bpod.read(
-    #                         length_of_event_name, str
-    #                     )[0]
-    #         modules[i] = module
-    #     self._children = modules

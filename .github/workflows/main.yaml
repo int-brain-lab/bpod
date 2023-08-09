@@ -1,4 +1,4 @@
-name: flake8 and unit-tests
+name: linting and unit-tests
 
 on:
   push:
@@ -37,9 +37,25 @@ jobs:
         run: |
           pip install --editable bpod
           pip install -r bpod/requirements.txt
+          pip install -r bpod/requirements-dev.txt
 
       - name: unit tests
         shell: bash -l {0}
         run: |
           cd bpod
           python -m unittest discover
+
+      - name: mypy
+        uses: sasanquaneuf/mypy-github-action@releases/v1
+        with:
+          checkName: 'tests'   # NOTE: this needs to be the same as the job name
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: black
+        uses: psf/black@stable
+        with:
+          options: "--check --verbose"
+          src: "./src"
+          jupyter: false
+          version: "22.3.0"

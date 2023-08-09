@@ -8,12 +8,12 @@ logging.basicConfig(level=logging.DEBUG)
 
 class TestBpod(unittest.TestCase):
     def test_unconnected(self):
-        bpod = Bpod()
+        bpod = Bpod(connect=False)
         assert bpod.is_open is False
 
     def test_singleton(self):
-        bpod1 = Bpod()
-        bpod2 = Bpod()
+        bpod1 = Bpod(connect=False)
+        bpod2 = Bpod(connect=False)
         bpod3 = Bpod("COM3", connect=False)
         bpod4 = Bpod("COM4", connect=False)
         bpod5 = Bpod(port="COM4", connect=False)
@@ -23,5 +23,5 @@ class TestBpod(unittest.TestCase):
         assert bpod4 is bpod5
 
     def test_set_port(self):
-        bpod = Bpod()
+        bpod = Bpod(connect=False)
         self.assertRaises(Exception, bpod.setPort)

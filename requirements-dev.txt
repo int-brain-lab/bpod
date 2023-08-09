@@ -3,10 +3,13 @@ coverage
 flake8
 flake8-black
 flake8-docstrings
+mypy
 myst_parser
 pre-commit
 pylint
 sphinx
 sphinx-autobuild
 sphinx-autodoc-typehints
+sphinx-copybutton
 sphinx-rtd-theme
+types-pyserial

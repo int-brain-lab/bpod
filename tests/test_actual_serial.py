@@ -1,27 +1,14 @@
 import unittest
-from serial import Serial, SerialException
-from serial.tools import list_ports
 from bpod import Bpod
 
-bpod_port = ''
-for port in list_ports.comports():
-    try:
-        p = Serial(port.device, timeout=0.2)
-        if p.read(1) == bytes([222]):
-            p.close()
-            bpod_port = port.device
-            break
-        p.close()
-    except SerialException:
-        pass
+bpod_port = next(Bpod.find(), None)
 
 
-@unittest.skipUnless(len(bpod_port) > 0, "No Bpod device found")
+@unittest.skipIf(bpod_port is None, "No Bpod device found")
 class TestSerial(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls) -> None:
-        cls._bpod = Bpod(bpod_port)
+        cls._bpod = Bpod()
 
     def test_datatypes(self):
         pass
