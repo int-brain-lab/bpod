@@ -41,9 +41,5 @@ jobs:
         shell: bash -l {0}
       - run: mypy
         shell: bash -l {0}
-      - uses: psf/black@stable
-        with:
-          options: "--check --verbose"
-          src: "src"
-          jupyter: false
-          version: "~= 22.0"
+      - run: black src --check --verbose
+        shell: bash -l {0}
