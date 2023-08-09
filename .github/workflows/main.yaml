@@ -44,6 +44,6 @@ jobs:
       - uses: psf/black@stable
         with:
           options: "--check --verbose"
-          src: "$GITHUB_WORKSPACE/src/*.py"
+          src: "src/*.py"
           jupyter: false
           version: "~= 22.0"
