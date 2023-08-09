@@ -32,19 +32,9 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pip install -r requirements-dev.txt
       - name: flake8
-        shell: bash -l {0}
-        run: |
-          pwd
-          ls -la
-          python -m flake8
-      - name: unit tests
-        shell: bash -l {0}
-        run: |
-          python -m unittest discover
-      - name: mypy
-        shell: bash -l {0}
-        run:
-          mypy
+        shell: flake8
+      - run: python -m unittest discover
+      - run: mypy
       - uses: psf/black@stable
         with:
           options: "--check --verbose"
