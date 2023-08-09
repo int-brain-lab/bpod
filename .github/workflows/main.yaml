@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
   pull_request:
-    branches: [master]
+    branches: [master, develop]
   workflow_dispatch:
 
 jobs:
@@ -46,11 +46,9 @@ jobs:
           python -m unittest discover
 
       - name: mypy
-        uses: sasanquaneuf/mypy-github-action@releases/v1
+        uses: jpetrucciani/mypy-check@master
         with:
-          checkName: 'tests'   # NOTE: this needs to be the same as the job name
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: './src'
 
       - name: black
         uses: psf/black@stable
