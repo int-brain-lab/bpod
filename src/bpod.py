@@ -9,6 +9,7 @@ import threading
 from struct import pack_into, unpack, calcsize
 
 import serial
+from serial.serialutil import to_bytes  # type: ignore
 from serial.threaded import ReaderThread, Protocol
 from serial.tools import list_ports
 import numpy as np
@@ -575,7 +576,7 @@ class Bpod(serial.Serial):
             case list():
                 data = b"".join([Bpod.to_bytes(item) for item in data])
             case _:
-                data = serial.to_bytes(data)  # type: ignore
+                data = to_bytes(data)
         return data
 
     def update_modules(self):
