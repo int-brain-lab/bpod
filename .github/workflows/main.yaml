@@ -46,9 +46,10 @@ jobs:
           python -m unittest discover
 
       - name: mypy
-        uses: jpetrucciani/mypy-check@master
-        with:
-          path: './src'
+        shell: bash -l {0}
+        run: |
+          cd bpod
+          mypy
 
       - name: black
         uses: psf/black@stable
