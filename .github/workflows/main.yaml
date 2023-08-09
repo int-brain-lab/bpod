@@ -44,6 +44,6 @@ jobs:
       - uses: psf/black@stable
         with:
           options: "--check --verbose"
-          src: "src/*.py"
+          src: "bpod/src/*.py"
           jupyter: false
           version: "~= 22.0"
