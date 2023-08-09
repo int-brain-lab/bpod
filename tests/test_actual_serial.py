@@ -1,5 +1,5 @@
 import unittest
-from bpod import Bpod
+from src.bpod import Bpod
 
 bpod_port = next(Bpod.find(), None)
 
