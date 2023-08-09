@@ -35,6 +35,7 @@ jobs:
         shell: bash -l {0}
         run: |
           pwd
+          ls -la
           python -m flake8
       - name: unit tests
         shell: bash -l {0}
