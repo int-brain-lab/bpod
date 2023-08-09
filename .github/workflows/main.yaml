@@ -2,11 +2,11 @@ name: linting and unit-tests
 
 on:
   push:
-    branches: [master]
+    branches: [master, develop]
   pull_request:
     branches: [master, develop]
   workflow_dispatch:
-
+    [master, develop]
 jobs:
   tests:
     name: build (${{ matrix.python-version }}, ${{ matrix.os }})
