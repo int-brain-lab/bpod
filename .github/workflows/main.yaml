@@ -29,6 +29,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
       - run: pip install --upgrade pip
+      - run: pip install --editable bpod
       - run: pip install -r requirements.txt
       - run: pip install -r requirements-dev.txt
       - run: flake8
