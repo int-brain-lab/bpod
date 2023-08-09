@@ -16,9 +16,9 @@ dependencies = [
 #    "gidgethub[httpx]>4.0.0",
 ]
 
-#[tool.blue]
-#line-length = 88
-#target-version = ["py38", "py39"]
+[tool.black]
+line-length = 88
+target-version = ["py310"]
 
 [tool.mypy]
 files = "./src/*.py"

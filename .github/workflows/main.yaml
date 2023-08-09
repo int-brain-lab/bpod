@@ -31,13 +31,12 @@ jobs:
       - run: pip install --upgrade pip
       - run: pip install -r requirements.txt
       - run: pip install -r requirements-dev.txt
-      - name: flake8
-        shell: flake8
+      - run: flake8
       - run: python -m unittest discover
       - run: mypy
       - uses: psf/black@stable
         with:
           options: "--check --verbose"
-          src: "$GITHUB_WORKSPACE/src"
+          src: "$GITHUB_WORKSPACE/src/*.py"
           jupyter: false
           version: "~= 22.0"
