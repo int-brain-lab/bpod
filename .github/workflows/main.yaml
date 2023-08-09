@@ -28,11 +28,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
-      - run: pip install --upgrade pip
-      - shell: bash -l {0}
-        run: pip install --editable bpod
-      - run: pip install -r requirements.txt
-      - run: pip install -r requirements-dev.txt
+      -   name: install requirements
+          shell: bash -l {0}
+          run: |
+            pip install --upgrade pip
+            pip install --editable bpod
+            pip install -r requirements.txt
+            pip install -r requirements-dev.txt
       - run: flake8
       - run: python -m unittest discover
       - run: mypy
