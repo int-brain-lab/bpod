@@ -13,6 +13,11 @@ class TestSerial(unittest.TestCase):
     def test_datatypes(self):
         pass
 
+    def test_serial_number(self):
+        sn = self._bpod.info.serial_number
+        my_bpod = Bpod(serial_number=sn)
+        assert(my_bpod == self._bpod)
+
     @classmethod
     def tearDownClass(cls) -> None:
         cls._bpod.close()

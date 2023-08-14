@@ -296,7 +296,8 @@ class Bpod(serial.Serial):
 
         # log hardware information
         log.info("Bpod Finite State Machine " + machine_str)
-        log.info("Circuit board revision {pcb_rev}") if pcb_rev else None
+        log.info(f"Serial number {serial_number}") if serial_number else None
+        log.info(f"Circuit board revision {pcb_rev}") if pcb_rev else None
         log.info("Firmware version {}.{}".format(*version))
 
         # get hardware self-description
