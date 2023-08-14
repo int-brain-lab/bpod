@@ -14,9 +14,9 @@ class TestBpod(unittest.TestCase):
     def test_singleton(self):
         bpod1 = Bpod(connect=False)
         bpod2 = Bpod(connect=False)
-        bpod3 = Bpod("COM3", connect=False)
-        bpod4 = Bpod("COM4", connect=False)
-        bpod5 = Bpod(port="COM4", connect=False)
+        bpod3 = Bpod("FakePort3", connect=False)
+        bpod4 = Bpod("FakePort4", connect=False)
+        bpod5 = Bpod(port="FakePort4", connect=False)
         assert bpod1 is bpod2
         assert bpod1 is not bpod3
         assert bpod3 is not bpod4
