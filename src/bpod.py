@@ -14,7 +14,6 @@ from serial.threaded import ReaderThread, Protocol
 from serial.tools import list_ports
 import numpy as np
 
-
 if TYPE_CHECKING:
     from _typeshed import ReadableBuffer  # noqa:401
 
@@ -87,6 +86,7 @@ class Bpod(serial.Serial):
     _lock: threading.Lock = threading.Lock()
 
     class _Info(NamedTuple):
+        serial_number: str
         firmware_version: tuple[int, int]
         machine_type: int
         machine_type_string: str
@@ -104,7 +104,11 @@ class Bpod(serial.Serial):
         output_description_array: bytes
 
     def __new__(
-        cls, port: Optional[str] = None, connect: Optional[bool] = True, **kwargs
+        cls,
+        port: Optional[str] = None,
+        serial_number: Optional[str] = None,
+        connect: Optional[bool] = True,
+        **kwargs,
     ) -> Bpod:
         """
         Create or retrieve a singleton instance of the Bpod class.
@@ -150,8 +154,9 @@ class Bpod(serial.Serial):
         .. code-block:: python
             bpod_instance = Bpod()
         """
-        if not isinstance(port, str) and port is not None:
-            raise ValueError("Parameter 'port' must be a string or None.")
+        # identify the device by its serial number
+        if port is None and serial_number is not None:
+            port = get_port_from_serial(serial_number) or port
 
         # try to automagically find a Bpod device
         if port is None and connect is True:
@@ -283,6 +288,7 @@ class Bpod(serial.Serial):
         log.debug("Handshake successful")
 
         # get firmware version, machine type & PCB revision
+        serial_number = get_serial_from_port(self.port)
         v_major, machine_type = self.query(b"F", "<2H")
         version = (v_major, self.query(b"f", "<H")[0] if v_major > 22 else 0)
         machine_str = {1: "v0.5", 2: "r07+", 3: "r2.0-2.5", 4: "2+ r1.0"}[machine_type]
@@ -293,8 +299,8 @@ class Bpod(serial.Serial):
         log.info("Circuit board revision {pcb_rev}") if pcb_rev else None
         log.info("Firmware version {}.{}".format(*version))
 
-        # get hardware description
-        info: list[Any] = [version, machine_type, machine_str, pcb_rev]
+        # get hardware self-description
+        info: list[Any] = [serial_number, version, machine_type, machine_str, pcb_rev]
         if v_major > 22:
             info.extend(self.query(b"H", "<2H6B"))
         else:
@@ -658,13 +664,57 @@ class Output(Channel):
             The state to set for the output channel. For binary I/O types, provide a
             bool. For pulse width modulation (PWM) I/O types, provide an int (0-255).
         """
-        if isinstance(state, int) and self.io_type in [b"D", b"B", b"W"]:
+        if isinstance(state, int) and self.io_type in (b"D", b"B", b"W"):
             state = state > 0
         self._write(["O", self.index, state.to_bytes(1, "little")])
 
 
 class Module(object):
     pass
+
+
+def get_serial_from_port(port: str) -> Union[str, None]:
+    """
+    Retrieve the serial number of a USB serial device identified by its communication
+    port.
+
+    Parameters
+    ----------
+    port : str
+        The communication port of the USB serial device for which you want to retrieve
+        the serial number.
+
+    Returns
+    -------
+    str or None
+        The serial number of the USB serial device corresponding to the provided
+        communication port. Returns None if no device matches the port.
+    """
+    port_info = list_ports.comports()
+    port = next((p for p in port_info if p.name == port), None)
+    return port.serial_number if port else None
+
+
+def get_port_from_serial(serial_number: str) -> Union[str, None]:
+    """
+    Retrieve the communication port of a USB serial device identified by its serial
+    number.
+
+    Parameters
+    ----------
+    serial_number : str
+       The serial number of the USB device that you want to obtain the communication
+       port of.
+
+    Returns
+    -------
+    str or None
+       The communication port of the USB serial device that matches the serial number
+       provided by the user. The function will return None if no such device was found.
+    """
+    port_info = list_ports.comports()
+    port = next((p for p in port_info if p.serial_number == serial_number), None)
+    return port.name if port else None
 
 
 def find_bpod_ports() -> Iterator[str]:
