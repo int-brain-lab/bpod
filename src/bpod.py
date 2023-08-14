@@ -234,7 +234,7 @@ class Bpod(serial.Serial):
         return f"Bpod(port={self.port})"
 
     @property
-    def port(self) -> Union[str, None]:
+    def port(self) -> Optional[str]:
         """
         Get the communication port used for the Bpod device.
 
@@ -378,7 +378,7 @@ class Bpod(serial.Serial):
         self.reset_input_buffer()
         return success
 
-    def write(self, data: Union[tuple[Sequence[Any], str], Any]) -> Union[int, None]:
+    def write(self, data: Union[tuple[Sequence[Any], str], Any]) -> Optional[int]:
         """Write data to the Bpod.
 
         Parameters
@@ -660,7 +660,7 @@ class Output(Channel):
 
         Parameters
         ----------
-        state : Union[bool, int]
+        state : bool or int
             The state to set for the output channel. For binary I/O types, provide a
             bool. For pulse width modulation (PWM) I/O types, provide an int (0-255).
         """
@@ -673,7 +673,7 @@ class Module(object):
     pass
 
 
-def get_serial_from_port(port: str) -> Union[str, None]:
+def get_serial_from_port(port: Optional[str]) -> Optional[str]:
     """
     Retrieve the serial number of a USB serial device identified by its communication
     port.
@@ -691,11 +691,11 @@ def get_serial_from_port(port: str) -> Union[str, None]:
         communication port. Returns None if no device matches the port.
     """
     port_info = list_ports.comports()
-    port = next((p for p in port_info if p.name == port), None)
-    return port.serial_number if port else None
+    port_match = next((p for p in port_info if p.name == port), None)
+    return port_match.serial_number if port_match else None
 
 
-def get_port_from_serial(serial_number: str) -> Union[str, None]:
+def get_port_from_serial(serial_number: str) -> Optional[str]:
     """
     Retrieve the communication port of a USB serial device identified by its serial
     number.
@@ -713,8 +713,8 @@ def get_port_from_serial(serial_number: str) -> Union[str, None]:
        provided by the user. The function will return None if no such device was found.
     """
     port_info = list_ports.comports()
-    port = next((p for p in port_info if p.serial_number == serial_number), None)
-    return port.name if port else None
+    port_match = next((p for p in port_info if p.serial_number == serial_number), None)
+    return port_match.name if port_match else None
 
 
 def find_bpod_ports() -> Iterator[str]:
