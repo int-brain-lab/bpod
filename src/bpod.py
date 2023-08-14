@@ -155,7 +155,7 @@ class Bpod(serial.Serial):
 
         # try to automagically find a Bpod device
         if port is None and connect is True:
-            port = next(iter(Bpod._instances.keys()), next(cls.find(), None))
+            port = next(iter(Bpod._instances.keys()), next(find_bpod_ports(), None))
 
         # implement singleton
         with cls._lock:
@@ -371,46 +371,6 @@ class Bpod(serial.Serial):
         success = self.query(b"6") == b"5"
         self.reset_input_buffer()
         return success
-
-    @staticmethod
-    def find() -> Iterator[str]:
-        """Discover serial ports used by Bpod devices.
-
-        This static method scans through the list of available serial ports and
-        identifies ports that are in use by a Bpod device. It does so by briefly opening
-        each port and checking for a specific byte pattern (byte 222). Ports matching
-        this pattern are yielded.
-
-        Yields
-        ------
-        str
-            The names of available serial ports compatible with the Bpod device.
-
-        Notes
-        -----
-        The method employs a brief timeout when opening each port to minimize the impact
-        on system resources.
-
-        SerialException is caught and ignored, allowing the method to continue scanning
-        even if certain ports encounter errors during opening.
-
-        Examples
-        --------
-
-        .. code-block:: python
-
-            for port in Bpod.find():
-                print(f"Bpod on {port}")
-            # Bpod on COM3
-            # Bpod on COM6
-        """
-        for port in (p for p in list_ports.comports() if p.vid == 0x16C0):
-            try:
-                with serial.Serial(port.device, timeout=0.2) as ser:
-                    if ser.read(1) == bytes([222]):
-                        yield port.device
-            except serial.SerialException:
-                pass
 
     def write(self, data: Union[tuple[Sequence[Any], str], Any]) -> Union[int, None]:
         """Write data to the Bpod.
@@ -705,3 +665,43 @@ class Output(Channel):
 
 class Module(object):
     pass
+
+
+def find_bpod_ports() -> Iterator[str]:
+    """Discover serial ports used by Bpod devices.
+
+    This method scans through the list of available serial ports and identifies ports
+    that are in use by a Bpod device. It does so by briefly opening each port and
+    checking for a specific byte pattern (byte 222). Ports matching this pattern are
+    yielded.
+
+    Yields
+    ------
+    str
+        The names of available serial ports compatible with the Bpod device.
+
+    Notes
+    -----
+    The method employs a brief timeout when opening each port to minimize the impact on
+    system resources.
+
+    SerialException is caught and ignored, allowing the method to continue scanning even
+    if certain ports encounter errors during opening.
+
+    Examples
+    --------
+
+    .. code-block:: python
+
+        for port in Bpod.find():
+            print(f"Bpod on {port}")
+        # Bpod on COM3
+        # Bpod on COM6
+    """
+    for port in (p for p in list_ports.comports() if p.vid == 0x16C0):
+        try:
+            with serial.Serial(port.name, timeout=0.2) as ser:
+                if ser.read(1) == bytes([222]):
+                    yield port.name
+        except serial.SerialException:
+            pass

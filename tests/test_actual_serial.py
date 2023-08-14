@@ -1,7 +1,7 @@
 import unittest
-from src.bpod import Bpod
+from src.bpod import Bpod, find_bpod_ports
 
-bpod_port = next(Bpod.find(), None)
+bpod_port = next(find_bpod_ports(), None)
 
 
 @unittest.skipIf(bpod_port is None, "No Bpod device found")
