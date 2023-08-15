@@ -1,5 +1,6 @@
 mock-serial
 numpy
+pygithub
 pyserial
 setuptools
 setuptools_scm

@@ -19,6 +19,11 @@ classifiers = [
     "Typing :: Typed",
 ]
 dynamic = ["version"]
+dependencies = [
+    "pyserial",
+    "pygithub",
+    "setuptools_scm"
+]
 
 [tool.setuptools_scm]
 write_to = "src/_version.py"

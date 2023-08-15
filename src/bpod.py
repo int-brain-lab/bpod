@@ -7,7 +7,7 @@ from typing import NamedTuple, Any, Sequence, Union, Optional, overload, TYPE_CH
 import logging
 import threading
 from struct import pack_into, unpack, calcsize
-from setuptools_scm import get_version
+from setuptools_scm import get_version  # type: ignore
 
 import serial
 from serial.serialutil import to_bytes  # type: ignore
@@ -82,10 +82,15 @@ class Bpod(serial.Serial):
             my_bpod.open()
     """
 
-    __version__ = get_version(root="..", relative_to=__file__)
-    _instances: dict = dict()
+    __version__ = get_version(
+        root="..",
+        relative_to=__file__,
+        version_scheme="guess-next-dev",
+        local_scheme="dirty-tag",
+    )
+    _instances: dict[str | None, Bpod] = dict()
     _instantiated = False
-    _lock: threading.Lock = threading.Lock()
+    _lock = threading.Lock()
 
     class _Info(NamedTuple):
         serial_number: str
