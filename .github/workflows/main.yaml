@@ -21,7 +21,6 @@ jobs:
         shell:  bash -l {0}
         run:    |
                 pip install --upgrade pip
-                pip install --editable bpod
                 pip install -r requirements.txt
                 pip install -r requirements-dev.txt
       - run:    python -m unittest discover
