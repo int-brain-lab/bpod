@@ -1,6 +1,6 @@
 import os
 import sys
-from importlib.metadata import version
+from importlib import metadata
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -13,7 +13,7 @@ from importlib.metadata import version
 project = "bpod"
 copyright = "2023, International Brain Laboratory"
 author = "International Brain Laboratory"
-release = version("bpod")
+release = metadata.version("bpod")
 version = ".".join(release.split(".")[:3])
 sys.path.insert(0, os.path.abspath("../../src/"))
 
