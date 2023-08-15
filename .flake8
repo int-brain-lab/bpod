@@ -9,6 +9,7 @@ exclude =
     docs
     setup.py
     build
+    _version.py
 per-file-ignores =
     __init__.py: F401
 docstring-convention=numpy

@@ -17,26 +17,34 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
           cache-dependency-path: '**/requirements*.txt'
-      - name:   install requirements
+      - name:   Install requirements
         shell:  bash -l {0}
         run:    |
                 pip install --upgrade pip
                 pip install -e .
                 pip install -r requirements.txt
                 pip install -r requirements-dev.txt
-      - run:    python -m unittest discover
+      - name:   Run unit-tests
+        run:    python -m unittest discover
         shell:  bash -l {0}
-      - run:    mypy
+      - name:   "Style guide enforcement: flake8"
+        run:    flake8 ./src
         shell:  bash -l {0}
-      - run:    black src --check --verbose
+      - name:   "Style guide enforcement: black"
+        run:    black src --check --verbose
         shell:  bash -l {0}
-      - run:    |
+      - name:   "Static type checking: mypy"
+        run:    mypy
+        shell:  bash -l {0}
+      - name:   Build python package
+        run:    |
                 pip install build
                 git fetch --prune --unshallow
                 git fetch --depth=1 origin +refs/tags/*:refs/tags/*
                 python -m build
-      - run:    sphinx-build docs/source _build
-      - name:   sphinx deploy
+      - name:   "Sphinx: build"
+        run:    sphinx-build docs/source _build
+      - name:   "Sphinx: deploy"
         uses:   peaceiris/actions-gh-pages@v3
         if:     ${{ runner.os == 'Linux' && matrix.python-version == '3.10' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         with:
