@@ -7,6 +7,7 @@ from typing import NamedTuple, Any, Sequence, Union, Optional, overload, TYPE_CH
 import logging
 import threading
 from struct import pack_into, unpack, calcsize
+from setuptools_scm import get_version
 
 import serial
 from serial.serialutil import to_bytes  # type: ignore
@@ -81,6 +82,7 @@ class Bpod(serial.Serial):
             my_bpod.open()
     """
 
+    __version__ = get_version(root="..", relative_to=__file__)
     _instances: dict = dict()
     _instantiated = False
     _lock: threading.Lock = threading.Lock()
@@ -154,6 +156,9 @@ class Bpod(serial.Serial):
         .. code-block:: python
             bpod_instance = Bpod()
         """
+        # log version
+        log.debug(f"bpod-{cls.__version__}")
+
         # identify the device by its serial number
         if port is None and serial_number is not None:
             port = get_port_from_serial(serial_number) or port

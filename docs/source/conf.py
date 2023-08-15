@@ -1,7 +1,6 @@
 import os
 import sys
-
-sys.path.insert(0, os.path.abspath("../../src/"))
+from importlib.metadata import version
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -14,7 +13,9 @@ sys.path.insert(0, os.path.abspath("../../src/"))
 project = "bpod"
 copyright = "2023, International Brain Laboratory"
 author = "International Brain Laboratory"
-release = "1.0.0"
+release = version("bpod")
+version = ".".join(release.split(".")[:3])
+sys.path.insert(0, os.path.abspath("../../src/"))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
