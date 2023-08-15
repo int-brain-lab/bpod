@@ -4,7 +4,7 @@ on: [push, pull_request, workflow_dispatch]
 
 jobs:
   prepare:
-    name: $prepare python ${{ matrix.python-version }} on {{ matrix.os }}
+    name: $python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -24,30 +24,19 @@ jobs:
                 pip install --editable bpod
                 pip install -r requirements.txt
                 pip install -r requirements-dev.txt
-  flake8:
-    name: $flake8 (python ${{ matrix.python-version }} on {{ matrix.os }})
-    needs: prepare
-    uses: ./.github/workflows/flake8.yaml
-    with:
-      os: ${{ matrix.os }}
-      python-version: ${{ matrix.python-version }}
-
-
-#      - run:    python -m unittest discover
-#        shell:  bash -l {0}
-#      - run:    mypy
-#        shell:  bash -l {0}
-#      - run:    black src --check --verbose
-#        shell:  bash -l {0}
-#      - run:    python -m build
-#        shell:  bash -l {0}
-#      - run:    sphinx-build docs/source _build
-#        if:     runner.os == 'Linux'
-#      - name:   sphinx deploy
-#        uses:   peaceiris/actions-gh-pages@v3
-#        if:     ${{ runner.os == 'Linux' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-#        with:
-#          publish_branch: gh-pages
-#          github_token:   ${{ secrets.GITHUB_TOKEN }}
-#          publish_dir:    _build/
-#          force_orphan:   true
+      - run:    python -m unittest discover
+        shell:  bash -l {0}
+      - run:    mypy
+        shell:  bash -l {0}
+      - run:    black src --check --verbose
+        shell:  bash -l {0}
+      - run:    python -m build
+      - run:    sphinx-build docs/source _build
+      - name:   sphinx deploy
+        uses:   peaceiris/actions-gh-pages@v3
+        if:     ${{ runner.os == 'Linux' && matrix.python-version == "3.10" && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        with:
+          publish_branch: gh-pages
+          github_token:   ${{ secrets.GITHUB_TOKEN }}
+          publish_dir:    _build/
+          force_orphan:   true
