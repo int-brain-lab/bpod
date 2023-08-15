@@ -7,9 +7,9 @@ mypy
 myst_parser
 pre-commit
 pylint
-sphinx
 sphinx-autobuild
 sphinx-autodoc-typehints
 sphinx-copybutton
 sphinx-rtd-theme
+sphinx<7.0.0
 types-pyserial
