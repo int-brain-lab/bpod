@@ -1,45 +1,53 @@
 name: linting and unit-tests
 
-on:
-  push:
-    branches:
-      - master
-      - develop
-  pull_request:
-    branches:
-      - master
-      - develop
-  workflow_dispatch:
-    branches:
-      - master
-      - develop
+on: [push, pull_request, workflow_dispatch]
 
 jobs:
-  tests:
-    name: build (${{ matrix.python-version }}, ${{ matrix.os }})
+  prepare:
+    name: $prepare python ${{ matrix.python-version }} on {{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: ["ubuntu-latest", "windows-latest"]
-        python-version: ["3.10"]
+        python-version: ["3.10", "3.x"]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
-      -   name: install requirements
-          shell: bash -l {0}
-          run: |
-            pip install --upgrade pip
-            pip install --editable bpod
-            pip install -r requirements.txt
-            pip install -r requirements-dev.txt
-      - run: flake8
-        shell: bash -l {0}
-      - run: python -m unittest discover
-        shell: bash -l {0}
-      - run: mypy
-        shell: bash -l {0}
-      - run: black src --check --verbose
-        shell: bash -l {0}
+          cache-dependency-path: '**/requirements*.txt'
+      - name:   install requirements
+        shell:  bash -l {0}
+        run:    |
+                pip install --upgrade pip
+                pip install --editable bpod
+                pip install -r requirements.txt
+                pip install -r requirements-dev.txt
+  flake8:
+    name: $flake8 (python ${{ matrix.python-version }} on {{ matrix.os }})
+    needs: prepare
+    uses: ./github/workflows/flake8.yaml
+    with:
+      os: ${{ matrix.os }}
+      python-version: ${{ matrix.python-version }}
+
+
+#      - run:    python -m unittest discover
+#        shell:  bash -l {0}
+#      - run:    mypy
+#        shell:  bash -l {0}
+#      - run:    black src --check --verbose
+#        shell:  bash -l {0}
+#      - run:    python -m build
+#        shell:  bash -l {0}
+#      - run:    sphinx-build docs/source _build
+#        if:     runner.os == 'Linux'
+#      - name:   sphinx deploy
+#        uses:   peaceiris/actions-gh-pages@v3
+#        if:     ${{ runner.os == 'Linux' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+#        with:
+#          publish_branch: gh-pages
+#          github_token:   ${{ secrets.GITHUB_TOKEN }}
+#          publish_dir:    _build/
+#          force_orphan:   true
