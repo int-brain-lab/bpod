@@ -1,7 +1,6 @@
 import os
 import sys
-
-from _version import __version__
+from importlib.metadata import version, PackageNotFoundError
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -14,7 +13,7 @@ from _version import __version__
 project = "bpod"
 copyright = "2023, International Brain Laboratory"
 author = "International Brain Laboratory"
-release = __version__
+release = version("bpod")
 version = ".".join(release.split(".")[:3])
 sys.path.insert(0, os.path.abspath("../../src/"))
 
