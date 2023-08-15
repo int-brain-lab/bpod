@@ -27,7 +27,7 @@ jobs:
   flake8:
     name: $flake8 (python ${{ matrix.python-version }} on {{ matrix.os }})
     needs: prepare
-    uses: .github/workflows/flake8.yaml@v4
+    uses: ./.github/workflows/flake8.yaml@v4
     with:
       os: ${{ matrix.os }}
       python-version: ${{ matrix.python-version }}
