@@ -32,6 +32,8 @@ jobs:
         shell:  bash -l {0}
       - run:    |
                 pip install build
+                git fetch --prune --unshallow
+                git fetch --depth=1 origin +refs/tags/*:refs/tags/*
                 python -m build
       - run:    sphinx-build docs/source _build
       - name:   sphinx deploy
