@@ -12,4 +12,3 @@ sphinx-autodoc-typehints
 sphinx-copybutton
 sphinx-rtd-theme
 sphinx<7.0.0
-types-pyserial

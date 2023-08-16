@@ -21,6 +21,7 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
     "pyserial",
+    "types-pyserial",
     "pygithub",
     "setuptools_scm"
 ]

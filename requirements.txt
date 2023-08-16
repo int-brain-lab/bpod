@@ -4,3 +4,4 @@ pygithub
 pyserial
 setuptools
 setuptools_scm
+types-pyserial

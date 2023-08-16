@@ -14,7 +14,7 @@ git clone https://github.com/int-brain-lab/bpod.git
 cd bpod
 python3.10 -m venv ./venv
 source ./venv/bin/activate
-pip install --upgrade pip wheel
+pip install --upgrade pip
 pip install -e .
 ```
 
@@ -28,7 +28,7 @@ git clone https://github.com/int-brain-lab/bpod.git
 cd bpod
 python3.10 -m venv ./venv
 source ./venv/bin/activate
-pip install --upgrade pip wheel
+pip install --upgrade pip
 pip install -e .
 pip install -r requirements-dev.txt
 pre-commit install
