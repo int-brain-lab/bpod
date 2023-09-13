@@ -29,8 +29,7 @@ cd bpod
 python3.10 -m venv ./venv
 source ./venv/bin/activate
 pip install --upgrade pip
-pip install -e .
-pip install -r requirements-dev.txt
+pip install -e .[DEV]
 pre-commit install
 ```
 

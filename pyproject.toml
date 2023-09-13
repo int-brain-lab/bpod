@@ -20,10 +20,31 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "pyserial",
-    "types-pyserial",
+    "mock-serial",
+    "numpy",
     "pygithub",
-    "setuptools_scm"
+    "pyserial",
+    "setuptools",
+    "setuptools_scm",
+    "types-pyserial",
+]
+
+[project.optional-dependencies]
+DEV = [
+    "black",
+    "coverage",
+    "flake8",
+    "flake8-black",
+    #"flake8-docstrings",
+    "mypy",
+    "myst_parser",
+    "pre-commit",
+    "pylint",
+    "sphinx-autobuild",
+    "sphinx-autodoc-typehints",
+    "sphinx-copybutton",
+    "sphinx-rtd-theme",
+    "sphinx<7.0.0",
 ]
 
 [tool.setuptools_scm]
