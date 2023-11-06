@@ -1,7 +1,7 @@
 import unittest
 import logging
 
-from src.bpod import Bpod
+from src.bpod import Bpod, SerialSingleton, SerialSingletonException
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -17,6 +17,7 @@ class TestBpod(unittest.TestCase):
         bpod3 = Bpod("FakePort3", connect=False)
         bpod4 = Bpod("FakePort4", connect=False)
         bpod5 = Bpod(port="FakePort4", connect=False)
+        self.assertRaises(SerialSingletonException, SerialSingleton, "FakePort4")
         assert bpod1 is bpod2
         assert bpod1 is not bpod3
         assert bpod3 is not bpod4

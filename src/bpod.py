@@ -39,355 +39,49 @@ class SerialReaderProtocolRaw(Protocol):
         log.info(exc)
 
 
-class BpodException(Exception):
+class SerialSingletonException(serial.SerialException):
     pass
 
 
-class Bpod(serial.Serial):
-    """Class for interfacing a Bpod Finite State Machine.
+class BpodException(SerialSingletonException):
+    pass
 
-    The Bpod class extends :class:`serial.Serial`.
 
-    Parameters
-    ----------
-    port : str, optional
-        The serial port for the Bpod device, or None to automatically detect a Bpod.
-    connect : bool, default: True
-        Whether to connect to the Bpod device. If True and 'port' is None, an
-        attempt will be made to automatically find and connect to a Bpod device.
-    **kwargs
-        Additional keyword arguments passed to :class:`serial.Serial`.
-
-    Examples
-    --------
-
-    * Try to automatically find a Bpod device and connect to it.
-
-        .. code-block:: python
-
-            my_bpod = Bpod()
-
-    * Connect to a Bpod device on COM3
-
-        .. code-block:: python
-
-            my_bpod = Bpod('COM3')
-
-    * Instantiate a Bpod object for a device on COM3 but only connect to it later.
-
-        .. code-block:: python
-
-            my_bpod = Bpod(port = "COM3", connect = False)
-            # (do other things)
-            my_bpod.open()
-    """
-
-    __version__ = get_version(
-        root="..",
-        relative_to=__file__,
-        version_scheme="guess-next-dev",
-        local_scheme="dirty-tag",
-    )
-    _instances: dict[str | None, Bpod] = dict()
+class SerialSingleton(serial.Serial):
+    _instances: dict[str | None, serial.Serial] = dict()
     _instantiated = False
     _lock = threading.Lock()
-
-    class _Info(NamedTuple):
-        serial_number: str
-        firmware_version: tuple[int, int]
-        machine_type: int
-        machine_type_string: str
-        pcb_revision: int
-        max_states: int
-        timer_period: int
-        max_serial_events: int
-        max_bytes_per_serial_message: int
-        n_global_timers: int
-        n_global_counters: int
-        n_conditions: int
-        n_inputs: int
-        input_description_array: bytes
-        n_outputs: int
-        output_description_array: bytes
 
     def __new__(
         cls,
         port: Optional[str] = None,
         serial_number: Optional[str] = None,
-        connect: Optional[bool] = True,
+        *args,
         **kwargs,
-    ) -> Bpod:
-        """
-        Create or retrieve a singleton instance of the Bpod class.
-
-        This method implements a singleton pattern for the Bpod class, ensuring that
-        only one instance is created for a given port. If an instance already exists
-        for the specified port, that instance is returned.
-
-        Parameters
-        ----------
-        port : str, optional
-            The serial port for the Bpod device, or None to automatically detect a Bpod.
-        connect : bool, optional
-            Whether to connect to the Bpod device. If True and 'port' is None, an
-            attempt will be made to automatically find and connect to a Bpod device.
-        **kwargs
-            Additional keyword arguments passed to serial.Serial.
-
-        Returns
-        -------
-        Bpod
-            A singleton instance of the Bpod class.
-
-        Raises
-        ------
-        ValueError
-            If 'port' is not a string and is not None.
-
-        Notes
-        -----
-        The singleton instances are managed by a class-level lock and dictionary.
-        Automatic Bpod detection relies on the find method.
-
-        Example
-        -------
-        To create or retrieve a Bpod instance on a specific port:
-
-        .. code-block:: python
-            bpod_instance = Bpod(port='COM3')
-
-        To automatically detect and create or retrieve a Bpod instance:
-
-        .. code-block:: python
-            bpod_instance = Bpod()
-        """
-        # log version
-        log.debug(f"bpod-{cls.__version__}")
-
+    ) -> SerialSingleton:
         # identify the device by its serial number
         if port is None and serial_number is not None:
             port = get_port_from_serial(serial_number) or port
 
-        # try to automagically find a Bpod device
-        if port is None and connect is True:
-            port = next(iter(Bpod._instances.keys()), next(find_bpod_ports(), None))
-
         # implement singleton
         with cls._lock:
-            instance = Bpod._instances.get(port, None)
+            instance = SerialSingleton._instances.get(port, None)
             if instance is None:
-                log.debug(f"Creating new Bpod instance on {port}")
+                log.debug(f"Creating new {cls.__name__} instance on {port}")
                 instance = super().__new__(cls)
-                Bpod._instances[port] = instance
+                SerialSingleton._instances[port] = instance
             else:
-                log.debug(f"Using existing Bpod instance on {port}")
+                instance_name = type(instance).__name__
+                if instance_name != cls.__name__:
+                    raise SerialSingletonException(
+                        f"{port} is already in use by an instance of {instance_name}"
+                    )
+                log.debug(f"Using existing {instance_name} instance on {port}")
             return instance
 
-    def __init__(
-        self, port: Optional[str] = None, connect: Optional[bool] = True, **kwargs
-    ) -> None:
-        """
-        Initialize a Bpod instance.
-
-        This method initializes a Bpod instance, allowing communication with a Bpod
-        device over a specified serial port.
-
-        Parameters
-        ----------
-        port : str, optional
-            The serial port for the Bpod device. If None and 'connect' is True, an
-            attempt will be made to automatically detect and use a Bpod port.
-        connect : bool, optional
-            Whether to establish a connection to the Bpod device. If True and 'port' is
-            None, automatic port detection will be attempted.
-        **kwargs
-            Additional keyword arguments to be passed to the constructor of
-            serial.Serial.
-
-        Notes
-        -----
-        -   If the Bpod instance is already instantiated, the method returns without
-            further action.
-        -   If 'port' is 'None' and 'connect' is True the former value may be
-            overridden based on existing instances
-        """
-        if self._instantiated:
-            return
-
-        # override port kwarg when using automatic port discovery (see __new__)
-        if port is None and connect is True:
-            port = next((k for (k, v) in self._instances.items() if v is self), None)
-
-        # initiate super class
-        if "baudrate" not in kwargs:
-            kwargs["baudrate"] = 1312500
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.port = port
-
-        self.info: Bpod._Info | None = None
-        self.inputs = None
-        self.outputs = None
-        self._reader: ReaderThread = ReaderThread(self, SerialReaderProtocolRaw)
         self._instantiated = True
-
-        if port is not None and connect is True:
-            self.open()
-
-    def __del__(self) -> None:
-        self.close()
-        with self._lock:
-            if self.port in Bpod._instances:
-                log.debug(f"Deleting instance on {self.port}")
-                Bpod._instances.pop(self.port)
-
-    def __repr__(self):
-        return f"Bpod(port={self.port})"
-
-    @property
-    def port(self) -> Optional[str]:
-        """
-        Get the communication port used for the Bpod device.
-
-        Returns
-        -------
-        str
-            The serial port (e.g., 'COM3', '/dev/ttyUSB0') used by the Bpod device.
-        """
-        return super().port
-
-    @port.setter
-    def port(self, port):
-        """
-        Set the communication port for the Bpod device.
-
-        This setter allows changing the communication port before the object is
-        instantiated. Once the object is instantiated, attempting to change the port
-        will raise a BpodException.
-
-        Parameters
-        ----------
-        port : str
-            The new communication port to be set (e.g., 'COM3', '/dev/ttyUSB0').
-
-        Raises
-        ------
-        BpodException
-            If an attempt is made to change the port after the object has been
-            instantiated.
-        """
-        if not self._instantiated:
-            super(type(self), type(self)).port.fset(self, port)
-            return
-        raise BpodException("Port cannot be changed after instantiation.")
-
-    def open(self) -> None:
-        """Open serial connection and connect to Bpod Finite State Machine.
-
-        Raises
-        ------
-        BpodException
-            Handshake failed: The Bpod did not acknowledge our request.
-        """
-        log.info("Connecting to Bpod device ...")
-        super().open()
-        log.debug(f"Serial port {self.port} opened")
-
-        # try to perform handshake
-        if not self.handshake():
-            raise BpodException("Handshake failed")
-        log.debug("Handshake successful")
-
-        # get firmware version, machine type & PCB revision
-        serial_number = get_serial_from_port(self.port)
-        v_major, machine_type = self.query(b"F", "<2H")
-        version = (v_major, self.query(b"f", "<H")[0] if v_major > 22 else 0)
-        machine_str = {1: "v0.5", 2: "r07+", 3: "r2.0-2.5", 4: "2+ r1.0"}[machine_type]
-        pcb_rev = self.query(b"v", "<B")[0] if v_major > 22 else None
-
-        # log hardware information
-        log.info("Bpod Finite State Machine " + machine_str)
-        log.info(f"Serial number {serial_number}") if serial_number else None
-        log.info(f"Circuit board revision {pcb_rev}") if pcb_rev else None
-        log.info("Firmware version {}.{}".format(*version))
-
-        # get hardware self-description
-        info: list[Any] = [serial_number, version, machine_type, machine_str, pcb_rev]
-        if v_major > 22:
-            info.extend(self.query(b"H", "<2H6B"))
-        else:
-            info.extend(self.query(b"H", "<2H5B"))
-            info.insert(-4, 3)  # max bytes per serial msg always = 3
-        info.extend(self.read(f"<{info[-1]}s1B"))
-        self.info = Bpod._Info(*info, *self.read(f"<{info[-1]}s"))
-
-        def collect_channels(description: bytes, dictionary: dict, channel_cls: type):
-            """
-            Generate a collection of channels based on the given description array and
-            dictionary.
-
-            This method takes a channel description array (as returned by the Bpod), a
-            dictionary mapping keys to names, and a channel class. It generates named
-            tuple instances and sets them as attributes on the current Bpod instance.
-            """
-            channels = []
-            types = []
-
-            for idx in range(len(description)):
-                io_key = description[idx : idx + 1]
-                if bytes(io_key) in dictionary.keys():
-                    n = description[:idx].count(io_key) + 1
-                    name = f"{dictionary[io_key]}{n}"
-                    channels.append(channel_cls(self, name, io_key, idx))
-                    types.append((name, channel_cls))
-
-            cls_name = f"{channel_cls.__name__.lower()}s"
-            setattr(self, cls_name, NamedTuple(cls_name, types)._make(channels))
-
-        log.debug("Configuring I/O ports")
-        input_dict = {b"B": "BNC", b"V": "Valve", b"P": "Port", b"W": "Wire"}
-        output_dict = {b"B": "BNC", b"V": "Valve", b"P": "PWM", b"W": "Wire"}
-        collect_channels(self.info.input_description_array, input_dict, Input)
-        collect_channels(self.info.output_description_array, output_dict, Output)
-
-        # log.debug("Configuring modules")
-        # self.modules = Modules(self)
-
-    def close(self):
-        """
-        Disconnect the state machine and close the serial connection.
-
-        Example
-        -------
-            .. code-block:: python
-                :emphasize-lines: 3
-
-                my_bpod = Bpod("COM3")
-                # [Perform operations with the state machine]
-                my_bpod.close()
-        """
-        if not self.is_open:
-            return
-        log.debug("Disconnecting state machine")
-        self.write(b"Z")
-        super().close()
-        log.debug(f"Serial port {self.port} closed")
-
-    def handshake(self) -> bool:
-        """
-        Try to perform handshake with Bpod device.
-
-        Returns
-        -------
-        bool
-            True if successful, False otherwise.
-
-        Notes
-        -----
-        This will reset the state machine's session clock and flush the serial port.
-        """
-        success = self.query(b"6") == b"5"
-        self.reset_input_buffer()
-        return success
 
     def write(self, data: Union[tuple[Sequence[Any], str], Any]) -> Optional[int]:
         """Write data to the Bpod.
@@ -556,6 +250,380 @@ class Bpod(serial.Serial):
                 data = to_bytes(data)
         return data
 
+
+def get_port_from_serial(serial_number: str) -> Optional[str]:
+    """
+    Retrieve the communication port of a USB serial device identified by its serial
+    number.
+
+    Parameters
+    ----------
+    serial_number : str
+       The serial number of the USB device that you want to obtain the communication
+       port of.
+
+    Returns
+    -------
+    str or None
+       The communication port of the USB serial device that matches the serial number
+       provided by the user. The function will return None if no such device was found.
+    """
+    port_info = list_ports.comports()
+    port_match = next((p for p in port_info if p.serial_number == serial_number), None)
+    return port_match.name if port_match else None
+
+
+def get_serial_from_port(port: Optional[str]) -> Optional[str]:
+    """
+    Retrieve the serial number of a USB serial device identified by its communication
+    port.
+
+    Parameters
+    ----------
+    port : str
+        The communication port of the USB serial device for which you want to retrieve
+        the serial number.
+
+    Returns
+    -------
+    str or None
+        The serial number of the USB serial device corresponding to the provided
+        communication port. Returns None if no device matches the port.
+    """
+    port_info = list_ports.comports()
+    port_match = next((p for p in port_info if p.name == port), None)
+    return port_match.serial_number if port_match else None
+
+
+class Bpod(SerialSingleton):
+    """Class for interfacing a Bpod Finite State Machine.
+
+    The Bpod class extends :class:`serial.Serial`.
+
+    Parameters
+    ----------
+    port : str, optional
+        The serial port for the Bpod device, or None to automatically detect a Bpod.
+    connect : bool, default: True
+        Whether to connect to the Bpod device. If True and 'port' is None, an
+        attempt will be made to automatically find and connect to a Bpod device.
+    **kwargs
+        Additional keyword arguments passed to :class:`serial.Serial`.
+
+    Examples
+    --------
+
+    * Try to automatically find a Bpod device and connect to it.
+
+        .. code-block:: python
+
+            my_bpod = Bpod()
+
+    * Connect to a Bpod device on COM3
+
+        .. code-block:: python
+
+            my_bpod = Bpod('COM3')
+
+    * Instantiate a Bpod object for a device on COM3 but only connect to it later.
+
+        .. code-block:: python
+
+            my_bpod = Bpod(port = "COM3", connect = False)
+            # (do other things)
+            my_bpod.open()
+    """
+
+    __version__ = get_version(
+        root="..",
+        relative_to=__file__,
+        version_scheme="guess-next-dev",
+        local_scheme="dirty-tag",
+    )
+
+    class _Info(NamedTuple):
+        serial_number: str
+        firmware_version: tuple[int, int]
+        machine_type: int
+        machine_type_string: str
+        pcb_revision: int
+        max_states: int
+        timer_period: int
+        max_serial_events: int
+        max_bytes_per_serial_message: int
+        n_global_timers: int
+        n_global_counters: int
+        n_conditions: int
+        n_inputs: int
+        input_description_array: bytes
+        n_outputs: int
+        output_description_array: bytes
+
+    def __new__(
+        cls,
+        port: Optional[str] = None,
+        connect: Optional[bool] = True,
+        **kwargs,
+    ) -> Bpod:
+        """
+        Create or retrieve a singleton instance of the Bpod class.
+
+        This method implements a singleton pattern for the Bpod class, ensuring that
+        only one instance is created for a given port. If an instance already exists
+        for the specified port, that instance is returned.
+
+        Parameters
+        ----------
+        port : str, optional
+            The serial port for the Bpod device, or None to automatically detect a Bpod.
+        connect : bool, optional
+            Whether to connect to the Bpod device. If True and 'port' is None, an
+            attempt will be made to automatically find and connect to a Bpod device.
+        **kwargs
+            Additional keyword arguments passed to serial.Serial.
+
+        Returns
+        -------
+        Bpod
+            A singleton instance of the Bpod class.
+
+        Raises
+        ------
+        ValueError
+            If 'port' is not a string and is not None.
+
+        Notes
+        -----
+        The singleton instances are managed by a class-level lock and dictionary.
+        Automatic Bpod detection relies on the find method.
+
+        Example
+        -------
+        To create or retrieve a Bpod instance on a specific port:
+
+        .. code-block:: python
+            bpod_instance = Bpod(port='COM3')
+
+        To automatically detect and create or retrieve a Bpod instance:
+
+        .. code-block:: python
+            bpod_instance = Bpod()
+        """
+        # log version
+        log.debug(f"bpod-{cls.__version__}")
+
+        # try to automagically find a Bpod device
+        if port is None and connect is True:
+            port = next(iter(Bpod._instances.keys()), next(find_bpod_ports(), None))
+
+        # implement singleton
+        return super(Bpod, cls).__new__(cls, port, **kwargs)
+
+    def __init__(
+        self, port: Optional[str] = None, connect: Optional[bool] = True, **kwargs
+    ) -> None:
+        """
+        Initialize a Bpod instance.
+
+        This method initializes a Bpod instance, allowing communication with a Bpod
+        device over a specified serial port.
+
+        Parameters
+        ----------
+        port : str, optional
+            The serial port for the Bpod device. If None and 'connect' is True, an
+            attempt will be made to automatically detect and use a Bpod port.
+        connect : bool, optional
+            Whether to establish a connection to the Bpod device. If True and 'port' is
+            None, automatic port detection will be attempted.
+        **kwargs
+            Additional keyword arguments to be passed to the constructor of
+            serial.Serial.
+
+        Notes
+        -----
+        -   If the Bpod instance is already instantiated, the method returns without
+            further action.
+        -   If 'port' is 'None' and 'connect' is True the former value may be
+            overridden based on existing instances
+        """
+        if self._instantiated:
+            return
+
+        # override port kwarg when using automatic port discovery (see __new__)
+        if port is None and connect is True:
+            port = next((k for (k, v) in self._instances.items() if v is self), None)
+
+        # initiate super class
+        if "baudrate" not in kwargs:
+            kwargs["baudrate"] = 1312500
+        super().__init__(**kwargs)
+
+        self.port = port
+        self.info: Bpod._Info | None = None
+        self.inputs = None
+        self.outputs = None
+        self._reader: ReaderThread = ReaderThread(self, SerialReaderProtocolRaw)
+
+        if port is not None and connect is True:
+            self.open()
+
+    def __del__(self) -> None:
+        self.close()
+        with self._lock:
+            if self.port in Bpod._instances:
+                log.debug(f"Deleting instance on {self.port}")
+                Bpod._instances.pop(self.port)
+
+    def __repr__(self):
+        return f"Bpod(port={self.port})"
+
+    @property
+    def port(self) -> Optional[str]:
+        """
+        Get the communication port used for the Bpod device.
+
+        Returns
+        -------
+        str
+            The serial port (e.g., 'COM3', '/dev/ttyUSB0') used by the Bpod device.
+        """
+        return super().port
+
+    @port.setter
+    def port(self, port):
+        """
+        Set the communication port for the Bpod device.
+
+        This setter allows changing the communication port before the object is
+        instantiated. Once the object is instantiated, attempting to change the port
+        will raise a BpodException.
+
+        Parameters
+        ----------
+        port : str
+            The new communication port to be set (e.g., 'COM3', '/dev/ttyUSB0').
+
+        Raises
+        ------
+        BpodException
+            If an attempt is made to change the port after the object has been
+            instantiated.
+        """
+        if not self._instantiated:
+            super(type(self), type(self)).port.fset(self, port)
+            return
+        raise BpodException("Port cannot be changed after instantiation.")
+
+    def open(self) -> None:
+        """Open serial connection and connect to Bpod Finite State Machine.
+
+        Raises
+        ------
+        BpodException
+            Handshake failed: The Bpod did not acknowledge our request.
+        """
+        log.info("Connecting to Bpod device ...")
+        super().open()
+        log.debug(f"Serial port {self.port} opened")
+
+        # try to perform handshake
+        if not self.handshake():
+            raise BpodException("Handshake failed")
+        log.debug("Handshake successful")
+
+        # get firmware version, machine type & PCB revision
+        serial_number = get_serial_from_port(self.port)
+        v_major, machine_type = self.query(b"F", "<2H")
+        version = (v_major, self.query(b"f", "<H")[0] if v_major > 22 else 0)
+        machine_str = {1: "v0.5", 2: "r07+", 3: "r2.0-2.5", 4: "2+ r1.0"}[machine_type]
+        pcb_rev = self.query(b"v", "<B")[0] if v_major > 22 else None
+
+        # log hardware information
+        log.info("Bpod Finite State Machine " + machine_str)
+        log.info(f"Serial number {serial_number}") if serial_number else None
+        log.info(f"Circuit board revision {pcb_rev}") if pcb_rev else None
+        log.info("Firmware version {}.{}".format(*version))
+
+        # get hardware self-description
+        info: list[Any] = [serial_number, version, machine_type, machine_str, pcb_rev]
+        if v_major > 22:
+            info.extend(self.query(b"H", "<2H6B"))
+        else:
+            info.extend(self.query(b"H", "<2H5B"))
+            info.insert(-4, 3)  # max bytes per serial msg always = 3
+        info.extend(self.read(f"<{info[-1]}s1B"))
+        self.info = Bpod._Info(*info, *self.read(f"<{info[-1]}s"))
+
+        def collect_channels(description: bytes, dictionary: dict, channel_cls: type):
+            """
+            Generate a collection of channels based on the given description array and
+            dictionary.
+
+            This method takes a channel description array (as returned by the Bpod), a
+            dictionary mapping keys to names, and a channel class. It generates named
+            tuple instances and sets them as attributes on the current Bpod instance.
+            """
+            channels = []
+            types = []
+
+            for idx in range(len(description)):
+                io_key = description[idx : idx + 1]
+                if bytes(io_key) in dictionary.keys():
+                    n = description[:idx].count(io_key) + 1
+                    name = f"{dictionary[io_key]}{n}"
+                    channels.append(channel_cls(self, name, io_key, idx))
+                    types.append((name, channel_cls))
+
+            cls_name = f"{channel_cls.__name__.lower()}s"
+            setattr(self, cls_name, NamedTuple(cls_name, types)._make(channels))
+
+        log.debug("Configuring I/O ports")
+        input_dict = {b"B": "BNC", b"V": "Valve", b"P": "Port", b"W": "Wire"}
+        output_dict = {b"B": "BNC", b"V": "Valve", b"P": "PWM", b"W": "Wire"}
+        collect_channels(self.info.input_description_array, input_dict, Input)
+        collect_channels(self.info.output_description_array, output_dict, Output)
+
+        # log.debug("Configuring modules")
+        # self.modules = Modules(self)
+
+    def close(self):
+        """
+        Disconnect the state machine and close the serial connection.
+
+        Example
+        -------
+            .. code-block:: python
+                :emphasize-lines: 3
+
+                my_bpod = Bpod("COM3")
+                # [Perform operations with the state machine]
+                my_bpod.close()
+        """
+        if not self.is_open:
+            return
+        log.debug("Disconnecting state machine")
+        self.write(b"Z")
+        super().close()
+        log.debug(f"Serial port {self.port} closed")
+
+    def handshake(self) -> bool:
+        """
+        Try to perform handshake with Bpod device.
+
+        Returns
+        -------
+        bool
+            True if successful, False otherwise.
+
+        Notes
+        -----
+        This will reset the state machine's session clock and flush the serial port.
+        """
+        success = self.query(b"6") == b"5"
+        self.reset_input_buffer()
+        return success
+
     def update_modules(self):
         pass
         # self.write(b"M")
@@ -682,50 +750,6 @@ class Output(Channel):
 
 class Module(object):
     pass
-
-
-def get_serial_from_port(port: Optional[str]) -> Optional[str]:
-    """
-    Retrieve the serial number of a USB serial device identified by its communication
-    port.
-
-    Parameters
-    ----------
-    port : str
-        The communication port of the USB serial device for which you want to retrieve
-        the serial number.
-
-    Returns
-    -------
-    str or None
-        The serial number of the USB serial device corresponding to the provided
-        communication port. Returns None if no device matches the port.
-    """
-    port_info = list_ports.comports()
-    port_match = next((p for p in port_info if p.name == port), None)
-    return port_match.serial_number if port_match else None
-
-
-def get_port_from_serial(serial_number: str) -> Optional[str]:
-    """
-    Retrieve the communication port of a USB serial device identified by its serial
-    number.
-
-    Parameters
-    ----------
-    serial_number : str
-       The serial number of the USB device that you want to obtain the communication
-       port of.
-
-    Returns
-    -------
-    str or None
-       The communication port of the USB serial device that matches the serial number
-       provided by the user. The function will return None if no such device was found.
-    """
-    port_info = list_ports.comports()
-    port_match = next((p for p in port_info if p.serial_number == serial_number), None)
-    return port_match.name if port_match else None
 
 
 def find_bpod_ports() -> Iterator[str]:
