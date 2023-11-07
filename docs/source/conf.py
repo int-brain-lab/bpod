@@ -1,6 +1,6 @@
 import os
 import sys
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import version
 
 # Configuration file for the Sphinx documentation builder.
 #

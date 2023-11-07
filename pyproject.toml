@@ -1,77 +1,112 @@
 [build-system]
-requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
+  build-backend = "setuptools.build_meta"
+  requires      = [ "setuptools>=45" ]
 
 [project]
-name = "bpod"
-description = "python module for interfacing with a Bpod finite state machine"
-authors = [
-    {name = "Florian Rau", email = "florian.rau@internationalbrainlab.com"},
-]
-readme = "README.md"
-requires-python = ">=3.10"
-classifiers = [
-    "Programming Language :: Python :: 3",
+  name        = "iblbpod"
+  description = "python module for interfacing with a Bpod finite state machine"
+
+  authors = [
+    { name = "Florian Rau", email = "florian.rau@internationalbrainlab.com" },
+  ]
+  classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
-    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering",
-    "Development Status :: 2 - Pre-Alpha",
     "Typing :: Typed",
-]
-dynamic = ["version"]
-dependencies = [
-    "mock-serial",
-    "numpy",
-    "pygithub",
-    "pyserial",
-    "setuptools",
-    "setuptools_scm",
-    "types-pyserial",
-]
+  ]
+  dependencies = [ "numpy", "pydantic", "pyserial", "types-pyserial" ]
+  dynamic = [ "version" ]
+  readme = "README.md"
+  requires-python = ">=3.10"
 
 [project.optional-dependencies]
-DEV = [
-    "black",
+  DEV = [
     "coverage",
-    "flake8",
-    "flake8-black",
-    #"flake8-docstrings",
+    "mock-serial",
     "mypy",
     "myst_parser",
     "pre-commit",
-    "pylint",
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+    "ruff",
     "sphinx-autobuild",
     "sphinx-autodoc-typehints",
     "sphinx-copybutton",
     "sphinx-rtd-theme",
     "sphinx<7.0.0",
-]
-
-[tool.setuptools_scm]
-write_to = "src/_version.py"
-version_scheme = "guess-next-dev"
-local_scheme = "dirty-tag"
+  ]
 
 [project.urls]
-"Homepage" = "https://github.com/int-brain-lab/bpod"
-"Documentation" = "https://int-brain-lab.github.io/bpod/"
-"Bug Tracker" = "https://github.com/int-brain-lab/bpod/issues"
+  "Bug Tracker"   = "https://github.com/int-brain-lab/bpod/issues"
+  "Documentation" = "https://int-brain-lab.github.io/bpod/"
+  "Homepage"      = "https://github.com/int-brain-lab/bpod"
 
-[tool.black]
-line-length = 88
-target-version = ["py310"]
+[tool.setuptools.dynamic]
+  readme  = { file = "README.md" }
+  version = { attr = "__version__" }
+
+[tool.setuptools.package-data]
+  "iblbpod" = [ "py.typed" ]
+
+[tool.setuptools.packages.find]
+  where = [ "src" ]
+
+[tool.ruff]
+  exclude = [ ".mypy_cache", "dist", "docs", "venv" ]
+  ignore = [
+    "D100",    # Missing docstring in public module
+    "D101",    # Missing docstring in public class
+    "D102",    # Missing docstring in puclic method
+    "D103",    # Missing docstring in public function
+    "D104",    # Missing docstring in public package
+    "D105",    # Missing docstring in magic method
+    "D401",    # First line of docstring should be in imperative mood
+    "PLR2004", # Magic value used in comparison, consider replacing with a constant variable
+  ]
+  indent-width = 4
+  line-length = 88
+  target-version = "py310"
+
+[tool.ruff.lint]
+  select = [
+    "B",   # flake8-bugbear
+    "D",   # pydocstyle
+    "E",   # pycodestyle
+    "F",   # Pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "PL",  # pylint
+    "SIM", # flake8-simplify
+    "UP",  # pyupgrade
+  ]
+
+[tool.ruff.format]
+  quote-style = "single"
+
+[tool.ruff.lint.pydocstyle]
+  convention = "numpy"
 
 [tool.mypy]
-files = "./src/*.py"
-python_version = "3.10"
+  exclude             = "^(?!src).*$"
+  files               = "src/**/*.py"
+  python_version      = "3.10"
+  warn_return_any     = true
+  warn_unused_configs = true
 
 [tool.coverage.paths]
-source = ["src"]
+  source = [ "src" ]
 
 [tool.coverage.run]
-branch = true
-source = ["src"]
+  branch = true
+  source = [ "src" ]
 
-[tool.coverage.report]
-show_missing = true
-fail_under = 100
+[tool.pytest.ini_options]
+  addopts              = "-q -ra --cov-report xml -n auto"
+  console_output_style = "count"
+  minversion           = "6.0"
+  testpaths            = [ "tests/" ]

@@ -9,9 +9,9 @@ jobs:
     strategy:
       matrix:
         os: ["ubuntu-latest", "windows-latest"]
-        python-version: ["3.10", "3.x"]
+        python-version: ["3.10", "3.11"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
@@ -19,27 +19,28 @@ jobs:
           cache-dependency-path: 'pyproject.toml'
       - name:   "Update pip"
         run:    pip install --upgrade pip
-      - name:   "Style guide enforcement: flake8"
+      - name:   "Style guide enforcement: ruff"
         run:    |
-                pip install flake8
-                flake8 ./src
-        shell:  bash -l {0}
-      - name:   "Style guide enforcement: black"
-        run:    |
-                pip install black
-                black src --check --verbose
-        shell:  bash -l {0}
-      - name:   Install requirements
-        shell:  bash -l {0}
-        run:    pip install -e .[DEV]
+                pip install ruff
+                ruff .
       - name:   "Static type checking: mypy"
         run:    |
                 pip install mypy
                 mypy
-        shell:  bash -l {0}
-      - name:   Run unit-tests
-        run:    python -m unittest discover
-        shell:  bash -l {0}
+      - name:   Install requirements
+        run:    pip install -e .[DEV]
+
+      - name: iblrig unit tests
+        run: pytest
+
+      - name: coveralls.io
+        uses: coverallsapp/github-action@v2
+        with:
+          flag-name: ${{ matrix.python-version }}, ${{ matrix.os }}
+          parallel: true
+          file: coverage.xml
+          compare-ref: iblrigv8
+
       - name:   Build python package
         run:    |
                 pip install build
@@ -56,3 +57,13 @@ jobs:
           github_token:   ${{ secrets.GITHUB_TOKEN }}
           publish_dir:    _build/
           force_orphan:   true
+
+  finish:
+    needs: tests
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Coveralls Finished
+      uses: coverallsapp/github-action@v2
+      with:
+        parallel-finished: true
