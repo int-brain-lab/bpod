@@ -1,5 +1,6 @@
 import unittest
 
+from serial_singleton import SerialSingletonException
 from src.bpod import Bpod, find_bpod_ports
 
 bpod_port = next(find_bpod_ports(), None)
@@ -10,6 +11,9 @@ class TestSerial(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls._bpod = Bpod()
+
+    def change_port(self):
+        self.assertRaises(SerialSingletonException, self._bpod.port, 'some_port')
 
     def test_datatypes(self):
         pass

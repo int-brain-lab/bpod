@@ -26,13 +26,12 @@
 [project.optional-dependencies]
   DEV = [
     "coverage",
-    "mock-serial",
+    "mock-serial ; platform_system == 'Linux'",
     "mypy",
     "myst_parser",
     "pre-commit",
     "pytest",
     "pytest-cov",
-    "pytest-xdist",
     "ruff",
     "sphinx-autobuild",
     "sphinx-autodoc-typehints",
@@ -50,11 +49,11 @@
   readme  = { file = "README.md" }
   version = { attr = "__version__" }
 
-[tool.setuptools.package-data]
-  "iblbpod" = [ "py.typed" ]
-
 [tool.setuptools.packages.find]
   where = [ "src" ]
+
+[tool.setuptools.package-data]
+  "iblbpod" = [ "py.typed" ]
 
 [tool.ruff]
   exclude = [ ".mypy_cache", "dist", "docs", "venv" ]
@@ -106,7 +105,7 @@
   source = [ "src" ]
 
 [tool.pytest.ini_options]
-  addopts              = "-q -ra --cov-report xml -n auto"
+  addopts              = "-q -ra --cov-report xml --cov=src"
   console_output_style = "count"
   minversion           = "6.0"
   testpaths            = [ "tests/" ]

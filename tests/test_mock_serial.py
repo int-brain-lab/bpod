@@ -11,7 +11,7 @@ with contextlib.suppress(ImportError):
 logging.basicConfig(level=logging.DEBUG)
 
 if platform.system() == 'Linux':
-    hw_description = b'\x00\x01d\x00Z\x10\x08\x10\x0cUUUUUXBBPPPP\x10UUUUUXBBPPPPVVVV'
+    HW_DESCRIPTION = b'\x00\x01d\x00Z\x10\x08\x10\x0cUUUUUXBBPPPP\x10UUUUUXBBPPPPVVVV'
 
     device = MockSerial()
     device.open()
@@ -30,7 +30,7 @@ if platform.system() == 'Linux':
     )
 
     device.stub(
-        name='get_hardware_description', receive_bytes=b'H', send_bytes=hw_description
+        name='get_hardware_description', receive_bytes=b'H', send_bytes=HW_DESCRIPTION
     )
     device.stub(
         name='enable_ports',

@@ -1,30 +1,24 @@
 from __future__ import annotations
 
-import ctypes
 import logging
-import threading
 from abc import abstractmethod
-from collections.abc import Iterator, Sequence
-from struct import calcsize, pack_into, unpack
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, NamedTuple, overload
 
-import numpy as np
 import serial
-from serial.serialutil import to_bytes  # type: ignore
+from serial import SerialException
 from serial.threaded import Protocol, ReaderThread
 from serial.tools import list_ports
 
+from serial_singleton import SerialSingleton, SerialSingletonException
 from . import __version__
 
 if TYPE_CHECKING:
     from _typeshed import ReadableBuffer  # noqa: F401
 
-logging.basicConfig(
-    format='%(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.DEBUG,
-)
-log = logging.getLogger(__name__)
+logging.getLogger(__name__).addHandler(logging.NullHandler())
+
+PROJECT_NAME = 'iblbpod'
 
 
 class SerialReaderProtocolRaw(Protocol):
@@ -56,285 +50,11 @@ class SerialReaderProtocolRaw(Protocol):
         ----------
         - exc: The exception that caused the connection loss, if any.
         """
-        log.info(exc)  # Make sure to import 'log' and initialize it in your code
-
-
-class SerialSingletonException(serial.SerialException):
-    pass
+        logging.info(exc)  # Make sure to import 'log' and initialize it in your code
 
 
 class BpodException(SerialSingletonException):
     pass
-
-
-class SerialSingleton(serial.Serial):
-    _instances: dict[str | None, serial.Serial] = dict()
-    _initialized = False
-    _lock = threading.Lock()
-
-    def __new__(
-        cls,
-        port: str | None = None,
-        serial_number: str | None = None,
-        *args,
-        **kwargs,
-    ):
-        # identify the device by its serial number
-        if port is None and serial_number is not None:
-            port = get_port_from_serial(serial_number) or port
-
-        # implement singleton
-        with cls._lock:
-            instance = SerialSingleton._instances.get(port, None)
-            if instance is None:
-                log.debug(f'Creating new {cls.__name__} instance on {port}')
-                instance = super().__new__(cls)
-                SerialSingleton._instances[port] = instance
-            else:
-                instance_name = type(instance).__name__
-                if instance_name != cls.__name__:
-                    raise SerialSingletonException(
-                        f'{port} is already in use by an instance of {instance_name}'
-                    )
-                log.debug(f'Using existing {instance_name} instance on {port}')
-            return instance
-
-    def __init__(
-        self, port: str | None = None, connect: bool = True, *args, **kwargs
-    ) -> None:
-        if self._initialized:
-            return
-        super().__init__(**kwargs)
-
-        self.port = port
-        if connect is True:
-            self.open()
-
-        self._initialized = True
-
-    @property
-    def port(self) -> str | None:
-        """
-        Get the serial device's communication port.
-
-        Returns
-        -------
-        str
-            The serial port (e.g., 'COM3', '/dev/ttyUSB0') used by the serial device.
-        """
-        return super().port
-
-    @port.setter
-    def port(self, port):
-        """
-        Set the serial device's communication port.
-
-        This setter allows changing the communication port before the object is
-        instantiated. Once the object is instantiated, attempting to change the port
-        will raise a SerialSingletonException.
-
-        Parameters
-        ----------
-        port : str
-            The new communication port to be set (e.g., 'COM3', '/dev/ttyUSB0').
-
-        Raises
-        ------
-        SerialSingletonException
-            If an attempt is made to change the port after the object has been
-            instantiated.
-        """
-        if self._initialized:
-            raise SerialSingletonException(
-                'Port cannot be changed after instantiation.'
-            )
-        serial.Serial.port.fset(self, port)
-
-    def write(self, data: tuple[Sequence[Any], str] | Any) -> int | None:
-        """
-        Write data to the Bpod.
-
-        Parameters
-        ----------
-        data : any
-            Data to be written to the Bpod.
-            See https://docs.python.org/3/library/struct.html#format-characters
-
-        Returns
-        -------
-        int or None
-            Number of bytes written to the Bpod.
-        """
-        if isinstance(data, tuple()):
-            size = calcsize(data[1])
-            buff = ctypes.create_string_buffer(size)
-            pack_into(data[1], buff, 0, *data[0])
-            return super().write(buff)
-        else:
-            return super().write(self.to_bytes(data))
-
-    @overload
-    def read(self, data_specifier: int = 1) -> bytes:
-        ...
-
-    @overload
-    def read(self, data_specifier: str) -> tuple[Any, ...]:
-        ...
-
-    def read(self, data_specifier=1):
-        r"""
-        Read data from the Bpod.
-
-        Parameters
-        ----------
-        data_specifier : int or str, default: 1
-            The number of bytes to receive from the Bpod, or a format string for
-            unpacking.
-
-            When providing an integer, the specified number of bytes will be returned
-            as a bytestring. When providing a `format string`_, the data will be
-            unpacked into a tuple accordingly. Format strings follow the conventions of
-            the :mod:`struct` module.
-
-            .. _format string:
-                https://docs.python.org/3/library/struct.html#format-characters
-
-        Returns
-        -------
-        bytes or tuple[Any]
-            Data returned by the Bpod. By default, data is formatted as a bytestring.
-            Alternatively, when provided with a format string, data will be unpacked
-            into a tuple according to the specified format string.
-
-        Examples
-        --------
-        Receive 4 bytes of data from a Bpod device - first interpreted as a bytestring,
-        then as a tuple of two unsigned short integers:
-
-        .. code-block:: python
-            :emphasize-lines: 3,4,7,8
-
-            my_bpod.write(b"F")
-            1
-            my_bpod.read(4)
-            b'\\x16\\x00\\x03\\x00'
-            my_bpod.write(b"F")
-            1
-            my_bpod.read('2H')
-            (22, 3)
-        """
-        if isinstance(data_specifier, str):
-            n_bytes = calcsize(data_specifier)
-            return unpack(data_specifier, super().read(n_bytes))
-        else:
-            return super().read(data_specifier)
-
-    @overload
-    def query(self, query: bytes | Sequence[Any], data_specifier: int = 1) -> bytes:
-        ...
-
-    @overload
-    def query(
-        self, query: bytes | Sequence[Any], data_specifier: str
-    ) -> tuple[Any, ...]:
-        ...
-
-    def query(self, query, data_specifier=1):
-        r"""
-        Query data from the Bpod.
-
-        This method is a combination of :py:meth:`write` and :py:meth:`read`.
-
-        Parameters
-        ----------
-        query : any
-            Query to be sent to the Bpod.
-        data_specifier : int or str, default: 1
-            The number of bytes to receive from the Bpod, or a format string for
-            unpacking.
-
-            When providing an integer, the specified number of bytes will be returned
-            as a bytestring. When providing a `format string`_, the data will be
-            unpacked into a tuple accordingly. Format strings follow the conventions of
-            the :py:mod:`struct` module.
-
-            .. _format string:
-                https://docs.python.org/3/library/struct.html#format-characters
-
-        Returns
-        -------
-        bytes or tuple[Any]
-            Data returned by the Bpod. By default, data is formatted as a bytestring.
-            Alternatively, when provided with a format string, data will be unpacked
-            into a tuple according to the specified format string.
-
-
-        Examples
-        --------
-        Query 4 bytes of data from a Bpod device - first interpreted as a bytestring,
-        then as a tuple of two unsigned short integers:
-
-        .. code-block:: python
-            :emphasize-lines: 2
-
-            my_bpod.query(b"F", 4)
-            b'\\x16\\x00\\x03\\x00'
-            my_bpod.query(b"F", '2H')
-            (22, 3)
-        """
-        self.write(query)
-        return self.read(data_specifier)
-
-    @staticmethod
-    def to_bytes(data: Any) -> bytes:
-        """
-        Convert data to bytestring.
-
-        This method extends :meth:`serial.to_bytes` with support for NumPy types,
-        strings (interpreted as utf-8) and lists.
-
-        Parameters
-        ----------
-        data : any
-            Data to be converted to bytestring.
-
-        Returns
-        -------
-        bytes
-            Data converted to bytestring.
-        """
-        match data:
-            case np.ndarray() | np.generic():
-                return data.tobytes()
-            case int():
-                return data.to_bytes(1, 'little')
-            case str():
-                return data.encode('utf-8')
-            case list():
-                return b''.join([Bpod.to_bytes(item) for item in data])
-            case _:
-                return to_bytes(data)  # type: ignore[no-any-return]
-
-
-def get_port_from_serial(serial_number: str) -> str | None:
-    """
-    Retrieve the com port of a USB serial device identified by its serial number.
-
-    Parameters
-    ----------
-    serial_number : str
-       The serial number of the USB device that you want to obtain the communication
-       port of.
-
-    Returns
-    -------
-    str or None
-       The communication port of the USB serial device that matches the serial number
-       provided by the user. The function will return None if no such device was found.
-    """
-    port_info = list_ports.comports()
-    port_match = next((p for p in port_info if p.serial_number == serial_number), None)
-    return port_match.name if port_match else None
 
 
 def get_serial_from_port(port: str | None) -> str | None:
@@ -466,7 +186,7 @@ class Bpod(SerialSingleton):
             bpod_instance = Bpod()
         """
         # log version
-        log.debug(f'bpod-{__version__}')
+        logging.debug(f'{PROJECT_NAME} v{__version__}')
 
         # try to automagically find a Bpod device
         if port is None and connect is True:
@@ -519,51 +239,8 @@ class Bpod(SerialSingleton):
         super().__init__(port=port, connect=connect, **kwargs)
         assert self._initialized is True
 
-    def __del__(self) -> None:
-        self.close()
-        with self._lock:
-            if self.port in Bpod._instances:
-                log.debug(f'Deleting instance on {self.port}')
-                Bpod._instances.pop(self.port)
-
     def __repr__(self):
         return f'Bpod(port={self.port})'
-
-    @property
-    def port(self) -> str | None:
-        """
-        Get the communication port used for the Bpod device.
-
-        Returns
-        -------
-        str
-            The serial port (e.g., 'COM3', '/dev/ttyUSB0') used by the Bpod device.
-        """
-        return super().port
-
-    @port.setter
-    def port(self, port):
-        """
-        Set the communication port for the Bpod device.
-
-        This setter allows changing the communication port before the object is
-        instantiated. Once the object is instantiated, attempting to change the port
-        will raise a BpodException.
-
-        Parameters
-        ----------
-        port : str
-            The new communication port to be set (e.g., 'COM3', '/dev/ttyUSB0').
-
-        Raises
-        ------
-        BpodException
-            If an attempt is made to change the port after the object has been
-            instantiated.
-        """
-        if self._initialized:
-            raise BpodException('Port cannot be changed after instantiation.')
-        super(type(self), type(self)).port.fset(self, port)
 
     def open(self) -> None:
         """
@@ -574,14 +251,11 @@ class Bpod(SerialSingleton):
         BpodException
             Handshake failed: The Bpod did not acknowledge our request.
         """
-        log.info('Connecting to Bpod device ...')
         super().open()
-        log.debug(f'Serial port {self.port} opened')
 
         # try to perform handshake
-        if not self.handshake():
-            raise BpodException('Handshake failed')
-        log.debug('Handshake successful')
+        if self.handshake():
+            logging.debug('Handshake successful')
 
         # get firmware version, machine type & PCB revision
         serial_number = get_serial_from_port(self.port)
@@ -591,10 +265,10 @@ class Bpod(SerialSingleton):
         pcb_rev = self.query(b'v', '<B')[0] if v_major > 22 else None
 
         # log hardware information
-        log.info('Bpod Finite State Machine ' + machine_str)
-        log.info(f'Serial number {serial_number}') if serial_number else None
-        log.info(f'Circuit board revision {pcb_rev}') if pcb_rev else None
-        log.info('Firmware version {}.{}'.format(*version))
+        logging.info('Bpod Finite State Machine ' + machine_str)
+        logging.info(f'Serial number {serial_number}') if serial_number else None
+        logging.info(f'Circuit board revision {pcb_rev}') if pcb_rev else None
+        logging.info('Firmware version {}.{}'.format(*version))
 
         # get hardware self-description
         info: list[Any] = [serial_number, version, machine_type, machine_str, pcb_rev]
@@ -628,25 +302,24 @@ class Bpod(SerialSingleton):
             cls_name = f'{channel_cls.__name__.lower()}s'
             setattr(self, cls_name, NamedTuple(cls_name, types)._make(channels))
 
-        log.debug('Configuring I/O ports')
+        logging.debug('Configuring I/O ports')
         input_dict = {b'B': 'BNC', b'V': 'Valve', b'P': 'Port', b'W': 'Wire'}
         output_dict = {b'B': 'BNC', b'V': 'Valve', b'P': 'PWM', b'W': 'Wire'}
         collect_channels(self.info.input_description_array, input_dict, Input)
         collect_channels(self.info.output_description_array, output_dict, Output)
 
-        # log.debug("Configuring modules")
+        # logging.debug("Configuring modules")
         # self.modules = Modules(self)
 
     def close(self):
         """Disconnect the state machine and close the serial connection."""
         if not self.is_open:
             return
-        log.debug('Disconnecting state machine')
+        logging.debug('Disconnecting state machine')
         self.write(b'Z')
         super().close()
-        log.debug(f'Serial port {self.port} closed')
 
-    def handshake(self) -> bool:
+    def handshake(self, raise_exception_on_fail: bool = True) -> bool:
         """
         Try to perform handshake with Bpod device.
 
@@ -659,8 +332,17 @@ class Bpod(SerialSingleton):
         -----
         This will reset the state machine's session clock and flush the serial port.
         """
-        success = self.query(b'6') == b'5'
-        self.reset_input_buffer()
+        try:
+            success = self.query(b'6') == b'5'
+        except SerialException as e:
+            if raise_exception_on_fail:
+                raise BpodException('Handshake failed') from e
+            success = False
+        finally:
+            self.reset_input_buffer()
+
+        if not success and raise_exception_on_fail:
+            raise BpodException('Handshake failed')
         return success
 
     def update_modules(self):
