@@ -23,12 +23,12 @@ jobs:
         run:    |
                 pip install ruff
                 ruff .
+      - name:   Install requirements
+        run:    pip install -e .[DEV]
       - name:   "Static type checking: mypy"
         run:    |
                 pip install mypy
                 mypy
-      - name:   Install requirements
-        run:    pip install -e .[DEV]
 
       - name: iblrig unit tests
         run: pytest
