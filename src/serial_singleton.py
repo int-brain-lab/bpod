@@ -2,7 +2,8 @@ import ctypes
 import logging
 import struct
 import threading
-from typing import Sequence, Any, overload
+from collections.abc import Sequence
+from typing import Any, overload
 
 import numpy as np
 import serial
@@ -153,8 +154,8 @@ class SerialSingleton(serial.Serial):
         Parameters
         ----------
         data_specifier : int or str, default: 1
-            The number of bytes to receive from the serial device, or a format string for
-            unpacking.
+            The number of bytes to receive from the serial device, or a format string
+            for unpacking.
 
             When providing an integer, the specified number of bytes will be returned
             as a bytestring. When providing a `format string`_, the data will be
@@ -167,9 +168,9 @@ class SerialSingleton(serial.Serial):
         Returns
         -------
         bytes or tuple[Any]
-            Data returned by the serial device. By default, data is formatted as a bytestring.
-            Alternatively, when provided with a format string, data will be unpacked
-            into a tuple according to the specified format string.
+            Data returned by the serial device. By default, data is formatted as a
+            bytestring. Alternatively, when provided with a format string, data will
+            be unpacked into a tuple according to the specified format string.
         """
         if isinstance(data_specifier, str):
             n_bytes = struct.calcsize(data_specifier)

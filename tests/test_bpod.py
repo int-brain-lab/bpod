@@ -19,7 +19,7 @@ class TestBpod(unittest.TestCase):
         bpod4 = Bpod('FakePort4', connect=False)
         bpod5 = Bpod(port='FakePort4', connect=False)
 
-        # assert that a port blocked by *another* class inheriting from SerialSingleton can't be used
+        # assert that a port blocked by *another* SerialSingleton child can't be used
         with self.assertRaises(SerialSingletonException):
             SerialSingleton('FakePort4')
 

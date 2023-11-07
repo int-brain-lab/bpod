@@ -3,14 +3,14 @@ from __future__ import annotations
 import logging
 from abc import abstractmethod
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, NamedTuple, overload
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import serial
 from serial import SerialException
 from serial.threaded import Protocol, ReaderThread
 from serial.tools import list_ports
-
 from serial_singleton import SerialSingleton, SerialSingletonException
+
 from . import __version__
 
 if TYPE_CHECKING:
