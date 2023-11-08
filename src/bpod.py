@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-PROJECT_NAME = "iblbpod"
+PROJECT_NAME = 'iblbpod'
 
 
 class SerialReaderProtocolRaw(Protocol):
@@ -34,7 +34,7 @@ class SerialReaderProtocolRaw(Protocol):
         ----------
         - transport: The transport object associated with the connection.
         """
-        print("Threaded serial reader started - ready to receive data...")
+        print('Threaded serial reader started - ready to receive data...')
 
     def data_received(self, data):
         """
@@ -169,7 +169,7 @@ class Bpod(SerialSingleton):
             bpod_instance = Bpod()
         """
         # log version
-        logging.debug(f"{PROJECT_NAME} v{__version__}")
+        logging.debug(f'{PROJECT_NAME} v{__version__}')
 
         # try to automagically find a Bpod device
         if port is None and connect is True:
@@ -217,13 +217,13 @@ class Bpod(SerialSingleton):
             port = next((k for (k, v) in self._instances.items() if v is self), None)
 
         # initialize super class
-        if "baudrate" not in kwargs:
-            kwargs["baudrate"] = 1312500
+        if 'baudrate' not in kwargs:
+            kwargs['baudrate'] = 1312500
         super().__init__(port=port, connect=connect, **kwargs)
         assert self._initialized is True
 
     def __repr__(self):
-        return f"Bpod(port={self.port})"
+        return f'Bpod(port={self.port})'
 
     def open(self) -> None:
         """
@@ -238,30 +238,30 @@ class Bpod(SerialSingleton):
 
         # try to perform handshake
         if self.handshake():
-            logging.debug("Handshake successful")
+            logging.debug('Handshake successful')
 
         # get firmware version, machine type & PCB revision
         serial_number = get_serial_number_from_port(self.port)
-        v_major, machine_type = self.query(b"F", "<2H")
-        version = (v_major, self.query(b"f", "<H")[0] if v_major > 22 else 0)
-        machine_str = {1: "v0.5", 2: "r07+", 3: "r2.0-2.5", 4: "2+ r1.0"}[machine_type]
-        pcb_rev = self.query(b"v", "<B")[0] if v_major > 22 else None
+        v_major, machine_type = self.query(b'F', '<2H')
+        version = (v_major, self.query(b'f', '<H')[0] if v_major > 22 else 0)
+        machine_str = {1: 'v0.5', 2: 'r07+', 3: 'r2.0-2.5', 4: '2+ r1.0'}[machine_type]
+        pcb_rev = self.query(b'v', '<B')[0] if v_major > 22 else None
 
         # log hardware information
-        logging.info("Bpod Finite State Machine " + machine_str)
-        logging.info(f"Serial number {serial_number}") if serial_number else None
-        logging.info(f"Circuit board revision {pcb_rev}") if pcb_rev else None
-        logging.info("Firmware version {}.{}".format(*version))
+        logging.info('Bpod Finite State Machine ' + machine_str)
+        logging.info(f'Serial number {serial_number}') if serial_number else None
+        logging.info(f'Circuit board revision {pcb_rev}') if pcb_rev else None
+        logging.info('Firmware version {}.{}'.format(*version))
 
         # get hardware self-description
         info: list[Any] = [serial_number, version, machine_type, machine_str, pcb_rev]
         if v_major > 22:
-            info.extend(self.query(b"H", "<2H6B"))
+            info.extend(self.query(b'H', '<2H6B'))
         else:
-            info.extend(self.query(b"H", "<2H5B"))
+            info.extend(self.query(b'H', '<2H5B'))
             info.insert(-4, 3)  # max bytes per serial msg always = 3
-        info.extend(self.read(f"<{info[-1]}s1B"))
-        self.info = Bpod._Info(*info, *self.read(f"<{info[-1]}s"))
+        info.extend(self.read(f'<{info[-1]}s1B'))
+        self.info = Bpod._Info(*info, *self.read(f'<{info[-1]}s'))
 
         def collect_channels(description: bytes, dictionary: dict, channel_cls: type):
             """
@@ -278,16 +278,16 @@ class Bpod(SerialSingleton):
                 io_key = description[idx : idx + 1]
                 if bytes(io_key) in dictionary:
                     n = description[:idx].count(io_key) + 1
-                    name = f"{dictionary[io_key]}{n}"
+                    name = f'{dictionary[io_key]}{n}'
                     channels.append(channel_cls(self, name, io_key, idx))
                     types.append((name, channel_cls))
 
-            cls_name = f"{channel_cls.__name__.lower()}s"
+            cls_name = f'{channel_cls.__name__.lower()}s'
             setattr(self, cls_name, NamedTuple(cls_name, types)._make(channels))
 
-        logging.debug("Configuring I/O ports")
-        input_dict = {b"B": "BNC", b"V": "Valve", b"P": "Port", b"W": "Wire"}
-        output_dict = {b"B": "BNC", b"V": "Valve", b"P": "PWM", b"W": "Wire"}
+        logging.debug('Configuring I/O ports')
+        input_dict = {b'B': 'BNC', b'V': 'Valve', b'P': 'Port', b'W': 'Wire'}
+        output_dict = {b'B': 'BNC', b'V': 'Valve', b'P': 'PWM', b'W': 'Wire'}
         collect_channels(self.info.input_description_array, input_dict, Input)
         collect_channels(self.info.output_description_array, output_dict, Output)
 
@@ -298,8 +298,8 @@ class Bpod(SerialSingleton):
         """Disconnect the state machine and close the serial connection."""
         if not self.is_open:
             return
-        logging.debug("Disconnecting state machine")
-        self.write(b"Z")
+        logging.debug('Disconnecting state machine')
+        self.write(b'Z')
         super().close()
 
     def handshake(self, raise_exception_on_fail: bool = True) -> bool:
@@ -316,16 +316,16 @@ class Bpod(SerialSingleton):
         This will reset the state machine's session clock and flush the serial port.
         """
         try:
-            success = self.query(b"6") == b"5"
+            success = self.query(b'6') == b'5'
         except SerialException as e:
             if raise_exception_on_fail:
-                raise BpodException("Handshake failed") from e
+                raise BpodException('Handshake failed') from e
             success = False
         finally:
             self.reset_input_buffer()
 
         if not success and raise_exception_on_fail:
-            raise BpodException("Handshake failed")
+            raise BpodException('Handshake failed')
         return success
 
     def update_modules(self):
@@ -376,7 +376,7 @@ class Channel:
         self._write = bpod.write
 
     def __repr__(self):
-        return self.__class__.__name__ + "()"
+        return self.__class__.__name__ + '()'
 
 
 class Input(Channel):
@@ -400,7 +400,7 @@ class Input(Channel):
         bool
             True if the input channel is active, False otherwise.
         """
-        return self._query(["I", self.index], 1) == b"\x01"
+        return self._query(['I', self.index], 1) == b'\x01'
 
     def override(self, state: bool) -> None:
         """
@@ -411,7 +411,7 @@ class Input(Channel):
         state : bool
             The state to set for the input channel.
         """
-        self._write(["V", state])
+        self._write(['V', state])
 
     def enable(self, state: bool) -> None:
         """
@@ -447,9 +447,9 @@ class Output(Channel):
             The state to set for the output channel. For binary I/O types, provide a
             bool. For pulse width modulation (PWM) I/O types, provide an int (0-255).
         """
-        if isinstance(state, int) and self.io_type in (b"D", b"B", b"W"):
+        if isinstance(state, int) and self.io_type in (b'D', b'B', b'W'):
             state = state > 0
-        self._write(["O", self.index, state.to_bytes(1, "little")])
+        self._write(['O', self.index, state.to_bytes(1, 'little')])
 
 
 class Module:
