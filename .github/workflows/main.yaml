@@ -3,8 +3,15 @@ name: linting and unit-tests
 on: [push, pull_request, workflow_dispatch]
 
 jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: chartboost/ruff-action@v1
+
   tests:
     name: python ${{ matrix.python-version }} on ${{ matrix.os }}
+    needs: ruff
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -17,22 +24,17 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
-          cache-dependency-path: 'pyproject.toml'
+          cache: "pip"
+          cache-dependency-path: "pyproject.toml"
 
-      - name:   "Update pip"
-        run:    pip install --upgrade pip
+      - name: "Update pip"
+        run: pip install --upgrade pip
 
-      - name:   "Style guide enforcement: ruff"
-        run:    |
-                pip install ruff
-                ruff .
+      - name: Install requirements
+        run: pip install -e .[DEV]
 
-      - name:   Install requirements
-        run:    pip install -e .[DEV]
-
-      - name:   "Static type checking: mypy"
-        run:    mypy
+      - name: "Static type checking: mypy"
+        run: mypy
 
       - name: iblrig unit tests
         run: pytest
@@ -44,29 +46,29 @@ jobs:
           parallel: true
           file: coverage.xml
 
-      - name:   Build python package
-        run:    |
-                pip install build
-                git fetch --prune --unshallow
-                git fetch --depth=1 origin +refs/tags/*:refs/tags/*
-                python -m build
-      - name:   "Sphinx: build"
-        run:    sphinx-build docs/source _build
-      - name:   "Sphinx: deploy"
-        uses:   peaceiris/actions-gh-pages@v3
-        if:     ${{ runner.os == 'Linux' && matrix.python-version == '3.10' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Build python package
+        run: |
+          pip install build
+          git fetch --prune --unshallow
+          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+          python -m build
+      - name: "Sphinx: build"
+        run: sphinx-build docs/source _build
+      - name: "Sphinx: deploy"
+        uses: peaceiris/actions-gh-pages@v3
+        if: ${{ runner.os == 'Linux' && matrix.python-version == '3.10' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         with:
           publish_branch: gh-pages
-          github_token:   ${{ secrets.GITHUB_TOKEN }}
-          publish_dir:    _build/
-          force_orphan:   true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: _build/
+          force_orphan: true
 
   finish:
     needs: tests
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
-    - name: Coveralls Finished
-      uses: coverallsapp/github-action@v2
-      with:
-        parallel-finished: true
+      - name: Coveralls Finished
+        uses: coverallsapp/github-action@v2
+        with:
+          parallel-finished: true
