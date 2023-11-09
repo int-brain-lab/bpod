@@ -10,10 +10,10 @@ from importlib.metadata import version
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "bpod"
+project = "iblbpod"
 copyright = "2023, International Brain Laboratory"
 author = "International Brain Laboratory"
-release = version("bpod")
+release = version(project)
 version = ".".join(release.split(".")[:3])
 sys.path.insert(0, os.path.abspath("../../src/"))
 
