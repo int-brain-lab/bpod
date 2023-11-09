@@ -7,7 +7,7 @@ from typing import Any, overload
 
 import numpy as np
 import serial
-from serial.serialutil import to_bytes  # type: ignore
+from serial.serialutil import to_bytes  # type: ignore[attr-defined]
 from serial.tools import list_ports
 
 
@@ -29,7 +29,7 @@ class SerialSingleton(serial.Serial):
     ):
         # identify the device by its serial number
         if port is None and serial_number is not None:
-            port = get_port_from_serial(serial_number) or port
+            port = get_port_from_serial_number(serial_number) or port
 
         # implement singleton
         with cls._lock:
@@ -47,19 +47,19 @@ class SerialSingleton(serial.Serial):
                 logging.debug(f'Using existing {instance_name} instance on {port}')
             return instance
 
-    def __init__(
-        self, port: str | None = None, connect: bool = True, *args, **kwargs
-    ) -> None:
+    def __init__(self, port: str | None = None, connect: bool = True, **kwargs) -> None:
         if self._initialized:
             return
+
         super().__init__(**kwargs)
 
-        self.port = port
+        serial.Serial.port.fset(self, port)  # type: ignore[attr-defined]
+        if port is not None and connect is True:
+            self.open()
+
         self.port_info = next(
             (p for p in list_ports.comports() if p.device == self.port), None
         )
-        if connect is True:
-            self.open()
 
         self._initialized = True
 
@@ -114,7 +114,8 @@ class SerialSingleton(serial.Serial):
             raise SerialSingletonException(
                 'Port cannot be changed after instantiation.'
             )
-        serial.Serial.port.fset(self, port)
+        if port is not None:
+            serial.Serial.port.fset(self, port)  # type: ignore[attr-defined]
 
     def write(self, data: tuple[Sequence[Any], str] | Any) -> int | None:
         """
@@ -265,7 +266,7 @@ class SerialSingleton(serial.Serial):
                 return to_bytes(data)  # type: ignore[no-any-return]
 
 
-def get_port_from_serial(serial_number: str) -> str | None:
+def get_port_from_serial_number(serial_number: str) -> str | None:
     """
     Retrieve the com port of a USB serial device identified by its serial number.
 
@@ -284,3 +285,24 @@ def get_port_from_serial(serial_number: str) -> str | None:
     port_info = list_ports.comports()
     port_match = next((p for p in port_info if p.serial_number == serial_number), None)
     return port_match.name if port_match else None
+
+
+def get_serial_number_from_port(port: str | None) -> str | None:
+    """
+    Retrieve the serial number of a USB serial device identified by its com port.
+
+    Parameters
+    ----------
+    port : str
+        The communication port of the USB serial device for which you want to retrieve
+        the serial number.
+
+    Returns
+    -------
+    str or None
+        The serial number of the USB serial device corresponding to the provided
+        communication port. Returns None if no device matches the port.
+    """
+    port_info = list_ports.comports()
+    port_match = next((p for p in port_info if p.name == port), None)
+    return port_match.serial_number if port_match else None

@@ -1,9 +1,10 @@
 [build-system]
   build-backend = "setuptools.build_meta"
-  requires      = [ "setuptools>=45" ]
+  requires      = [ "mypy", "setuptools>=45", "wheel" ]
 
 [project]
   name        = "iblbpod"
+  version     = "0.1.0"
   description = "python module for interfacing with a Bpod finite state machine"
 
   authors = [
@@ -19,7 +20,6 @@
     "Typing :: Typed",
   ]
   dependencies = [ "numpy", "pydantic", "pyserial", "types-pyserial" ]
-  dynamic = [ "version" ]
   readme = "README.md"
   requires-python = ">=3.10"
 
@@ -46,14 +46,15 @@
   "Homepage"      = "https://github.com/int-brain-lab/bpod"
 
 [tool.setuptools.dynamic]
-  readme  = { file = "README.md" }
-  version = { attr = "__version__" }
+  readme = { file = "README.md" }
+
+[tool.setuptools.package-data]
+  "iblbpod"          = [ "py.typed" ]
+  "bpod"             = [ "py.typed" ]
+  "serial_singleton" = [ "py.typed" ]
 
 [tool.setuptools.packages.find]
   where = [ "src" ]
-
-[tool.setuptools.package-data]
-  "iblbpod" = [ "py.typed" ]
 
 [tool.ruff]
   exclude = [ ".mypy_cache", "dist", "docs", "venv" ]

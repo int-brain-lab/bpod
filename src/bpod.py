@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from abc import abstractmethod
 from collections.abc import Iterator
+from importlib import metadata
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import serial
@@ -15,14 +16,13 @@ from serial_singleton import (
     get_serial_number_from_port,
 )
 
-from . import __version__
-
 if TYPE_CHECKING:
     from _typeshed import ReadableBuffer  # noqa: F401
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 PROJECT_NAME = 'iblbpod'
+VERSION = metadata.version(PROJECT_NAME)
 
 
 class SerialReaderProtocolRaw(Protocol):
@@ -169,7 +169,7 @@ class Bpod(SerialSingleton):
             bpod_instance = Bpod()
         """
         # log version
-        logging.debug(f'{PROJECT_NAME} v{__version__}')
+        logging.debug(f'{PROJECT_NAME} {VERSION}')
 
         # try to automagically find a Bpod device
         if port is None and connect is True:
@@ -316,17 +316,16 @@ class Bpod(SerialSingleton):
         This will reset the state machine's session clock and flush the serial port.
         """
         try:
-            success = self.query(b'6') == b'5'
+            return self.query(b'6') == b'5'
         except SerialException as e:
             if raise_exception_on_fail:
                 raise BpodException('Handshake failed') from e
-            success = False
         finally:
             self.reset_input_buffer()
 
-        if not success and raise_exception_on_fail:
+        if raise_exception_on_fail:
             raise BpodException('Handshake failed')
-        return success
+        return False
 
     def update_modules(self):
         pass
