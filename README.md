@@ -14,7 +14,7 @@ git clone https://github.com/int-brain-lab/bpod.git
 cd bpod
 python3.10 -m venv ./venv
 source ./venv/bin/activate
-pip install --upgrade pip wheel
+pip install --upgrade pip
 pip install -e .
 ```
 
@@ -28,16 +28,12 @@ git clone https://github.com/int-brain-lab/bpod.git
 cd bpod
 python3.10 -m venv ./venv
 source ./venv/bin/activate
-pip install --upgrade pip wheel
-pip install -e .
-pip install -r requirements-dev.txt
+pip install --upgrade pip
+pip install -e .[DEV]
 pre-commit install
 ```
 
 This repository is adhering to the following conventions:
 
 * [semantic versioning](https://semver.org/) for consistent version numbering logic
-* [gitflow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow)
-  for managing branches
-* [Flake8](https://flake8.pycqa.org/) for style guide enforcement
-* [black](https://github.com/psf/black) for style guide enforcement
+* [rough](https://docs.astral.sh/ruff) for linting and formatting

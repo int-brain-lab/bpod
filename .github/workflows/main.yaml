@@ -1,46 +1,57 @@
-name: Bpod
+name: linting and unit-tests
 
-on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
-  workflow_dispatch:
+on: [push, workflow_dispatch]
 
 jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: chartboost/ruff-action@v1
+
   tests:
-    name: build (${{ matrix.python-version }}, ${{ matrix.os }})
+    name: python ${{ matrix.python-version }} on ${{ matrix.os }}
+    needs: ruff
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: ["ubuntu-latest", "windows-latest"]
-        python-version: ["3.10"]
-    steps:
-      - name: Checkout bpod repo
-        uses: actions/checkout@v3
-        with:
-          path: bpod
+        python-version: ["3.10", "3.11"]
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: "pyproject.toml"
 
-      - name: flake8
-        run: |
-          pip install flake8 --quiet
-          cd bpod
-          python -m flake8
+      - name: "Update pip"
+        run: pip install --upgrade pip
 
-      - name: requirements
-        shell: bash -l {0}
-        run: |
-          pip install --editable bpod
-          pip install -r bpod/requirements.txt
+      - name: Install requirements
+        run: pip install -e .[DEV]
 
-      - name: unit tests
-        shell: bash -l {0}
-        run: |
-          cd bpod
-          cd tests
-          python -m unittest discover
+      - name: "Static type checking: mypy"
+        run: mypy
+
+      - name: iblrig unit tests
+        run: pytest
+
+      - name: coveralls.io
+        uses: coverallsapp/github-action@v2
+        with:
+          flag-name: ${{ matrix.python-version }}, ${{ matrix.os }}
+          parallel: true
+          file: coverage.xml
+
+  finish:
+    needs: tests
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Coveralls Finished
+        uses: coverallsapp/github-action@v2
+        with:
+          parallel-finished: true
