@@ -37,7 +37,7 @@
     "sphinx-autodoc-typehints",
     "sphinx-copybutton",
     "sphinx-rtd-theme",
-    "sphinx<8.0.0",
+    "sphinx<9.0.0",
   ]
 
 [project.urls]
