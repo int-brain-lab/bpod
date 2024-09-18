@@ -1,7 +1,7 @@
 bpod
 ====
 
-**bpod** is a Python class for communicating with the *Bpod* device from [*Sanworks*](https://sanworks.io/).
+**bpod-core** is a Python package for communicating with the *Bpod* device from [*Sanworks*](https://sanworks.io/).
 
 This project is maintained by the software development team at the
 [*International Brain Lab*](https://internationalbrainlab.org/).
@@ -10,7 +10,7 @@ Installation for use
 --------------------
 
 ``` bash
-git clone https://github.com/int-brain-lab/bpod.git
+git clone https://github.com/int-brain-lab/bpod-core.git
 cd bpod
 python3.10 -m venv ./venv
 source ./venv/bin/activate
@@ -24,7 +24,7 @@ Installation for developers
 ---------------------------
 
 ``` bash
-git clone https://github.com/int-brain-lab/bpod.git
+git clone https://github.com/int-brain-lab/bpod-core.git
 cd bpod
 python3.10 -m venv ./venv
 source ./venv/bin/activate
@@ -36,4 +36,4 @@ pre-commit install
 This repository is adhering to the following conventions:
 
 * [semantic versioning](https://semver.org/) for consistent version numbering logic
-* [rough](https://docs.astral.sh/ruff) for linting and formatting
+* [ruff](https://docs.astral.sh/ruff) for linting and formatting
